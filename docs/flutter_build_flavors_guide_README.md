@@ -1,6 +1,6 @@
 ## What does `flutter_build_flavors_guide.md` say?
 
-> **Reflects Flutter 3.41 / Dart 3.11 (early 2026).** When the SDK moves on, the
+> **Reflects Flutter 3.44 / Dart 3.12 (mid 2026).** When the SDK moves on, the
 > sections that name a specific version (UIScene, 16 KB pages, Java 17, iOS 13 minimum,
 > AGP 9 status) are the ones to revisit first.
 

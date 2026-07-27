@@ -1,6 +1,6 @@
 ## What does `flutter_project_engineering_standard.md` say?
 
-> **Reflects Flutter 3.41 / Dart 3.11 (early 2026).** When the SDK moves on, the
+> **Reflects Flutter 3.44 / Dart 3.12 (mid 2026).** When the SDK moves on, the
 > sections that name a specific Flutter version (UIScene, 16 KB pages, `TextScaler`,
 > Java 17, AGP 9 status, iOS 13 minimum, etc.) are the ones to revisit first.
 

@@ -7,7 +7,7 @@ This guide documents one well-tested approach for each platform. It is not the o
 approach. Teams with different CI pipelines, signing strategies, or flavor matrices should treat
 the examples here as a starting point and document their deviations in `docs/architecture.md`.
 
-> **Reflects Flutter 3.41 / Dart 3.11 (early 2026).** Where a constraint comes from a
+> **Reflects Flutter 3.44 / Dart 3.12 (mid 2026).** Where a constraint comes from a
 > specific Flutter version (UIScene, 16 KB pages, Java 17, etc.), the version is named so
 > you can verify against your toolchain.
 
@@ -19,8 +19,8 @@ Before any flavored build runs, the host toolchain MUST satisfy these minimums:
 
 | Concern | Minimum | Notes |
 |---------|---------|-------|
-| Flutter | 3.38 (3.41+ recommended) | Below 3.38 misses UIScene auto-migration and Java 17 alignment |
-| Dart | 3.11 (ships with Flutter 3.41) | `flutter pub run` is deprecated; use `dart run` |
+| Flutter | 3.44 (3.44+ recommended) | Below 3.38 misses UIScene auto-migration and Java 17 alignment |
+| Dart | 3.12 (ships with Flutter 3.44) | `flutter pub run` is deprecated; use `dart run` |
 | JDK (Android builds) | **Java 17** (Flutter 3.38+) | Java 11 builds fail; Gradle 8.14+ needs JDK 17 |
 | AGP (Android Gradle Plugin) | 8.x — **NOT 9.x** | AGP 9 audit is paused as of Flutter 3.41 |
 | iOS deployment target | **iOS 13** (Flutter 3.41 raised from iOS 12) | Set in `ios/Podfile` and Xcode Build Settings |
