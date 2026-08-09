@@ -304,6 +304,9 @@ lib/
 
 Rules:
 
+- Root `CLAUDE.md` MUST exist at the project root and follow [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md).
+- Root `AGENTS.md` MUST exist at the project root and follow [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md).
+- `plans/` and `change_log/` files MUST use relative repository paths only (no absolute system paths) and MUST NOT contain sensitive or private data (secrets, keys, tokens, passwords, local absolute paths, internal IPs, credentials).
 - `core/config/` MUST exist and hold `AppConfig` + `ConfigService` exactly as in §1.
 - The About screen lives under `screens/` (e.g. `screens/about_screen.dart`) and reads its
   values from `ConfigService` / `AppConfig` — it MUST NOT hard-code About text.
@@ -317,6 +320,9 @@ Rules:
 
 ## 4. Quick checklist for a new (or migrated) app
 
+- [ ] Root `CLAUDE.md` exists at project root and follows [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md) (**MUST**).
+- [ ] Root `AGENTS.md` exists at project root and follows [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md) (**MUST**).
+- [ ] `plans/` and `change_log/` files use relative repository paths only and contain zero sensitive or internet-inappropriate data (**MUST**).
 - [ ] `assets/config/app_config.json` exists with `appName`, `description`, `version`,
       `build`, `details`.
 - [ ] `assets/config/` registered under `flutter: assets:` in `pubspec.yaml`.

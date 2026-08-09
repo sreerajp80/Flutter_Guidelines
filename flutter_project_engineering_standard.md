@@ -137,16 +137,21 @@ project/
 |-- linux/                    # Optional
 |-- macos/                    # Optional
 |-- assets/
+|   |-- config/               # app_config.json (About screen source of truth)
 |   |-- fonts/
 |   |-- icons/
 |   `-- images/
 |       |-- 2.0x/
 |       `-- 3.0x/
 |-- docs/
+|   `-- GUIDELINES_MANIFEST.md
+|-- plans/                    # change planning logs
+|-- change_log/               # implemented change logs
 |-- lib/
 |-- test/
 |-- integration_test/         # Required only when end-to-end coverage applies
 |-- .github/workflows/
+|-- CLAUDE.md                 # Mandatory project-root AI instructions (MUST)
 |-- analysis_options.yaml
 |-- pubspec.yaml
 |-- README.md
@@ -2129,16 +2134,20 @@ build/
 
 | Document | Purpose |
 |----------|---------|
+| `CLAUDE.md` | Mandatory project-root AI instructions following `CLAUDE_MD_GUIDELINE.md` (MUST) |
+| `AGENTS.md` | Mandatory project-root AI agent instructions following `AGENTS_MD_GUIDELINE.md` (MUST) |
 | `README.md` | Setup, run, test, and build instructions |
+| `docs/GUIDELINES_MANIFEST.md` | Portable pointer manifest indexing shared Flutter guidelines |
 | `docs/architecture.md` | Module boundaries, initialization sequence, schema version, major decisions |
 | `docs/release_process.md` | Required for shipped apps |
+| `plans/` | One plan per change — MUST use relative repository paths only and zero sensitive data |
+| `change_log/` | One log per change — MUST use relative repository paths only and zero sensitive data |
 
 ### 21.2 Recommended Documents
 
 - `CHANGELOG.md` for user-facing release history.
 - `docs/security.md` for sensitive-data apps.
 - `docs/adr/` for architecture decision records that are likely to be revisited.
-- Repository-specific AI instructions such as `AGENTS.md`, `CLAUDE.md`, or equivalent.
 
 ### 21.3 README Must Include
 
@@ -2158,12 +2167,14 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 
 ### 22.1 Before Writing Code
 
+- Read and adhere strictly to the project's root `CLAUDE.md` / `AGENTS.md` instructions (following `CLAUDE_MD_GUIDELINE.md` and `AGENTS_MD_GUIDELINE.md`).
 - Read the existing code before modifying it.
 - Identify whether the repo is Tier 1 or Tier 2 and follow the existing structure.
 - Identify the existing state-management pattern and follow it.
 - Identify which applicability profile is in force for the repository.
 - Check the current database schema version before writing any migration.
 - Check whether the repository commits or excludes generated files before creating new models.
+- Write a plan to `plans/` and obtain explicit user approval before modifying project files.
 
 ### 22.2 While Writing Code
 
@@ -2172,6 +2183,7 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Do not add boilerplate comments or type annotations to unchanged code.
 - Do not invent abstractions for one-time operations.
 - Apply the security profile in force; never log secrets or weaken cryptographic behavior.
+- Ensure all `plans/` and `change_log/` entries use **relative repository paths only** (no absolute local paths like `C:\...` or `l:\...`) and contain **no sensitive information** (API keys, secrets, passwords, keystore passphrases, local absolute paths, internal IPs, credentials).
 - Do not use `kDebugMode` or `kReleaseMode` as a substitute for application flavor when the
   project has explicit environments.
 - Always add `const` to constructors and widget instantiations where possible.
@@ -2186,6 +2198,7 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Run `flutter analyze` before considering the task complete.
 - Run `dart run build_runner build --delete-conflicting-outputs` after modifying annotated files.
 - Add or update tests when logic changes.
+- Write a change log to `change_log/` referencing the plan, using relative paths only and excluding all sensitive information.
 - Verify that no secrets, local machine files, or build artifacts are staged.
 - Verify that any new database schema change is accompanied by a migration.
 
@@ -2204,6 +2217,7 @@ A task is complete only when all applicable items are true.
 - `flutter test` passes for behavior-affecting code changes.
 - `dart format .` produces no required follow-up changes.
 - No secrets, build output, or local machine files were added to git.
+- All `plans/` and `change_log/` files use relative repository paths only and contain zero sensitive data suitable for public internet sharing.
 - Generated files were regenerated if any annotated source was changed.
 
 ### 23.2 Production App Extension

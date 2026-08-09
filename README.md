@@ -24,12 +24,19 @@ That is why cross-references inside the documents use a `docs/` prefix — for e
 | [flutter_build_flavors_guide.md](flutter_build_flavors_guide.md) | A platform-by-platform technical reference for setting up build flavors on Android, iOS, and Windows. |
 | [release_process.md](release_process.md) | A step-by-step release runbook — versioning, hardening, signing, per-platform build commands, distribution, rollback. |
 | [security.md](security.md) | A per-project security blueprint template — threat model, sensitive-data inventory, crypto design, OWASP checklist. |
+| [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md) | Mandatory guideline for creating and maintaining the project-root `CLAUDE.md` for every Flutter project (**MUST**). |
+| [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md) | Mandatory guideline for creating and maintaining the project-root `AGENTS.md` for other LLMs and AI agents (**MUST**). |
+| [DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md) | How to create files in a project's `docs/` folder (local vs submodule, naming rules, file anatomy, catalog of recognized doc types). |
+| [GUIDELINES_MANIFEST.md](GUIDELINES_MANIFEST.md) | Single, portable manifest file copied into a project's `docs/` folder to index all shared guidelines. |
 
 ## Where do I start?
 
+- **Writing / maintaining project root `CLAUDE.md` & `AGENTS.md` (MUST)** — follow [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md) and [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md).
 - **Starting a new app** — read [guideline.md](guideline.md) (the conventions to follow
   from day one) and [flutter_project_engineering_standard.md](flutter_project_engineering_standard.md)
   (the rules to build to).
+- **Structuring project `docs/` files** — follow [DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md).
+- **Adding guidelines to an existing app** — copy [GUIDELINES_MANIFEST.md](GUIDELINES_MANIFEST.md) to your app's `docs/` folder.
 - **Designing one app's structure** — fill in [architecture.md](architecture.md) for that app.
 - **Setting up build flavors** — see [flutter_build_flavors_guide.md](flutter_build_flavors_guide.md).
 - **Shipping a release** — follow [release_process.md](release_process.md).
@@ -44,7 +51,7 @@ across the row.
 
 | Profile | Applies to | Documents / sections in force |
 |---|---|---|
-| `Core Baseline` | Every app | [guideline.md](guideline.md); the Core Baseline rules of [flutter_project_engineering_standard.md](flutter_project_engineering_standard.md); [architecture.md](architecture.md) (fill in what applies) |
+| `Core Baseline` | Every app | Root `CLAUDE.md` (via [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md), **MUST**); Root `AGENTS.md` (via [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md), **MUST**); [guideline.md](guideline.md); the Core Baseline rules of [flutter_project_engineering_standard.md](flutter_project_engineering_standard.md); [architecture.md](architecture.md) (fill in what applies); [DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md) |
 | `Production App Extension` | Apps shipped to real users / QA / stores | The above **plus** [release_process.md](release_process.md), [flutter_build_flavors_guide.md](flutter_build_flavors_guide.md) (if using flavors), and the `Production App Extension` sections of the engineering standard |
 | `Sensitive Data Extension` | Apps handling secrets, PII, health, finance, or local encrypted stores | The above **plus** [security.md](security.md) and the `Sensitive Data Extension` sections of the engineering standard |
 
