@@ -54,7 +54,12 @@ filled-in local file (`docs/…`). The rule (from `GUIDELINES_MANIFEST.md`) is:
 - **No date prefix.** Date-prefixed names (`yyyymmdd_hhMMss_*`) are only for `plans/` and
   `change_log/` at the project root, never for `docs/`. All `plans/` and `change_log/` files MUST
   use relative repository paths only (no absolute system paths like `C:\...` or `l:\...`) and MUST NOT
-  contain any sensitive or private information that cannot be shared publicly on the internet.
+  contain **local system details** — OS user name, computer/host name, home or drive-letter paths,
+  network share names, LAN/internal IP addresses, local server URLs with ports, device serial
+  numbers, personal email addresses — or any secret (API keys, tokens, passwords, keystore
+  passphrases, credentials, PII). These files are committed and may become public, so write them
+  as if a stranger will read them. The full rule, with bad → good examples, is in
+  `flutter_project_engineering_standard.md` §21.1.1.
 - Keep the name short and obvious: `architecture.md`, not `app_architecture_overview_v2.md`.
 - For a point-in-time record that is genuinely one-off (an audit of a specific phase), it is
   fine to include a phase marker in the name, e.g. `security_audit_phase13.md`. Put the date

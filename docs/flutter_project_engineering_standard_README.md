@@ -71,6 +71,8 @@ The engineering standard is **not a fill-in-the-blanks template**. You do not wr
 
 **Configure `flutter_localizations` in `MaterialApp`** — Section 8.1. Without `GlobalMaterialLocalizations` delegates, certain Material widgets render incorrectly on non-English system locales. A one-line fix at project creation that prevents a confusing bug later.
 
+**Create `l10n.yaml` and `lib/l10n/app_en.arb` — even for a one-language app** — Section 8.2. This is a hard rule now, not a "later" job. ARB files are Flutter's version of Android's `strings.xml`. Put every user-visible string in the ARB file and read it with `AppLocalizations.of(context)`; no raw text inside widgets. Logs, non-UI exception messages, asset paths, route names, and map keys may stay as plain literals. Doing this on day one means adding a language later is just one new `app_xx.arb` file plus one line in `supportedLocales` — instead of hunting text through every screen.
+
 **Run the dependency audit for offline apps** — Section 16.5. For fully offline apps, `dart pub deps --style=tree` must be run before adding any package. This verifies no transitive HTTP dependency is introduced. Architecturally mandatory, not optional.
 
 **Create `docs/architecture.md` and `docs/security.md`** — Section 21.1 lists these as required documents. Fill out all 🔴 Must sections in both before coding begins.

@@ -836,8 +836,10 @@ container at any of these values.
 
 ## 8. Localization And Internationalization
 
-This section applies to all user-facing app repositories. Even single-language apps MUST complete
-the minimum setup in 8.1 to avoid widget rendering failures on non-English system locales.
+This section is `Core Baseline`: it applies to every user-facing app repository, including apps
+that ship only one language. Single-language apps MUST complete the minimum setup in 8.1 (to avoid
+widget rendering failures on non-English system locales) **and** the string externalization in 8.2
+(so a second language is only a new file, never a rewrite).
 
 ### 8.1 Minimum Setup (All Apps)
 
@@ -895,18 +897,43 @@ synthetic-package: false
 import clarity); leaving the default `true` writes it into the synthetic `flutter_gen` package.
 Pick one and document the choice.
 
-### 8.2 String Externalization
+### 8.2 String Externalization (Mandatory, All Apps)
 
-When the app supports or plans to support more than one language, all user-visible strings MUST
-be externalized into ARB files.
+Every app MUST externalize its user-visible strings into ARB files, **even if it supports only one
+language**. This is not optional and does not wait for a translation request.
+
+ARB files are the Flutter equivalent of Android's `res/values/strings.xml`. On Android we create
+`strings.xml` from day one even for a one-language app, so adding a language later is just a new
+`values-xx/strings.xml`. We follow the same habit in Flutter: create `app_en.arb` from day one, so
+adding a language later is just a new `app_xx.arb` — not a rewrite of every screen.
+
+Required for every app:
+
+- `l10n.yaml` MUST exist at the project root (see 8.1).
+- `lib/l10n/app_en.arb` MUST exist (or the app's own base locale, e.g. `app_ml.arb`).
+- Every user-visible string MUST be defined in the ARB file and read through
+  `AppLocalizations.of(context)`. A raw string literal in a widget is not allowed.
+- Every ARB entry MUST have an `@key` description, so a future translator has context.
+
+**Narrow exceptions** — these MAY stay as plain Dart literals, because a user never reads them:
+
+| Allowed as a literal | Example |
+|---|---|
+| Log and debug messages | `AppLogger.d('cache miss for $id')` |
+| Exception messages not shown in the UI | `throw StateError('db not initialized')` |
+| Technical identifiers | asset paths, route names, map/JSON keys, `Semantics` test tags |
+| Developer-only screens | a debug menu that never ships to users |
+
+Anything a real user reads — screen titles, buttons, labels, hints, error text shown on screen,
+empty states, snackbars, dialogs, notification text — goes in the ARB file.
 
 Directory structure:
 
 ```text
 lib/
 `-- l10n/
-    |-- app_en.arb
-    `-- app_es.arb   # Add per supported locale
+    |-- app_en.arb   # REQUIRED — the base locale, even for a single-language app
+    `-- app_es.arb   # OPTIONAL — one more file per additional locale
 ```
 
 Example ARB file:
@@ -932,8 +959,18 @@ Generate typed accessors:
 flutter gen-l10n
 ```
 
-Use in code via `AppLocalizations.of(context)!.appTitle`. Never use raw string literals for
-user-visible text in a localized app.
+Use in code via `AppLocalizations.of(context)!.appTitle` (or `AppLocalizations.of(context).appTitle`
+when `nullable-getter: false` is set). Never use raw string literals for user-visible text — in any
+app, single-language or not.
+
+**Adding a second language later.** Because the strings are already externalized, this is a small,
+mechanical job:
+
+1. Add `lib/l10n/app_<code>.arb` with the same keys and translated values.
+2. Add `Locale('<code>')` to `supportedLocales`.
+3. Run `flutter gen-l10n`.
+
+No screen or widget code changes.
 
 ### 8.3 RTL Layout Support
 
@@ -2140,8 +2177,29 @@ build/
 | `docs/GUIDELINES_MANIFEST.md` | Portable pointer manifest indexing shared Flutter guidelines |
 | `docs/architecture.md` | Module boundaries, initialization sequence, schema version, major decisions |
 | `docs/release_process.md` | Required for shipped apps |
-| `plans/` | One plan per change — MUST use relative repository paths only and zero sensitive data |
-| `change_log/` | One log per change — MUST use relative repository paths only and zero sensitive data |
+| `plans/` | One plan per change — MUST follow the privacy rule in 21.1.1 |
+| `change_log/` | One log per change — MUST follow the privacy rule in 21.1.1 |
+
+#### 21.1.1 Privacy Rule For `plans/` And `change_log/`
+
+Files in `plans/` and `change_log/` are committed and may become public on the internet. They MUST
+use relative repository paths only and MUST NOT contain any **local system details** — OS user
+name, computer/host name, home or drive-letter paths (`C:\Users\...`, `l:\...`, `file:///...`),
+network share names, LAN or internal IP addresses, local server URLs with ports, device serial
+numbers, personal email addresses — or any secret (API key, token, password, keystore passphrase,
+credential, PII).
+
+Write them as if a stranger will read them. Nothing should reveal the machine they were written on.
+
+| Do not write | Write instead |
+|---|---|
+| `l:\Android\MyApp\lib\main.dart` | `lib/main.dart` |
+| `C:\Users\<name>\.gradle\gradle.properties` | "the local Gradle home" |
+| `file:///l:/Android/MyApp/plans/x.md` | `../plans/x.md` |
+| `\\OFFICE-PC\share\build` | "the shared build folder" |
+| `192.168.1.42:8080` | "the local dev server" |
+| `someone@example.com` | "the release owner" |
+| `keystorePassword=hunter2` | "the keystore password (stored outside the repo)" |
 
 ### 21.2 Recommended Documents
 
@@ -2183,7 +2241,8 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Do not add boilerplate comments or type annotations to unchanged code.
 - Do not invent abstractions for one-time operations.
 - Apply the security profile in force; never log secrets or weaken cryptographic behavior.
-- Ensure all `plans/` and `change_log/` entries use **relative repository paths only** (no absolute local paths like `C:\...` or `l:\...`) and contain **no sensitive information** (API keys, secrets, passwords, keystore passphrases, local absolute paths, internal IPs, credentials).
+- Ensure all `plans/` and `change_log/` entries follow the privacy rule in 21.1.1: **relative repository paths only**, **no local system details** (OS user name, computer/host name, home or drive-letter paths, network shares, LAN/internal IPs, local server URLs with ports, device serial numbers, personal email addresses), and **no secrets** (API keys, tokens, passwords, keystore passphrases, credentials, PII).
+- Put all user-visible strings in `lib/l10n/*.arb` and read them through `AppLocalizations` (section 8.2) — never a raw string literal in a widget, even in a single-language app.
 - Do not use `kDebugMode` or `kReleaseMode` as a substitute for application flavor when the
   project has explicit environments.
 - Always add `const` to constructors and widget instantiations where possible.
@@ -2198,7 +2257,8 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Run `flutter analyze` before considering the task complete.
 - Run `dart run build_runner build --delete-conflicting-outputs` after modifying annotated files.
 - Add or update tests when logic changes.
-- Write a change log to `change_log/` referencing the plan, using relative paths only and excluding all sensitive information.
+- Write a change log to `change_log/` referencing the plan, using relative paths only and excluding all local system details and sensitive information (section 21.1.1).
+- Re-read the new plan and change log once before finishing, purely to check for leaked local system details.
 - Verify that no secrets, local machine files, or build artifacts are staged.
 - Verify that any new database schema change is accompanied by a migration.
 
@@ -2217,7 +2277,9 @@ A task is complete only when all applicable items are true.
 - `flutter test` passes for behavior-affecting code changes.
 - `dart format .` produces no required follow-up changes.
 - No secrets, build output, or local machine files were added to git.
-- All `plans/` and `change_log/` files use relative repository paths only and contain zero sensitive data suitable for public internet sharing.
+- All `plans/` and `change_log/` files use relative repository paths only and contain zero local system details and zero sensitive data — safe to publish on the internet (section 21.1.1).
+- `l10n.yaml` and `lib/l10n/app_<base>.arb` exist, and every user-visible string added or changed by
+  this task comes from `AppLocalizations` (section 8.2).
 - Generated files were regenerated if any annotated source was changed.
 
 ### 23.2 Production App Extension

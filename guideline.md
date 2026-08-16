@@ -299,14 +299,24 @@ lib/
   screens/           # full-page screens (incl. the About screen)
   widgets/           # reusable UI widgets
   theme/             # colors, text styles, ThemeData
-  l10n/              # localization (if the app is translated)
+  l10n/              # ARB string files. REQUIRED for every app, even single-language.
 ```
 
 Rules:
 
 - Root `CLAUDE.md` MUST exist at the project root and follow [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md).
 - Root `AGENTS.md` MUST exist at the project root and follow [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md).
-- `plans/` and `change_log/` files MUST use relative repository paths only (no absolute system paths) and MUST NOT contain sensitive or private data (secrets, keys, tokens, passwords, local absolute paths, internal IPs, credentials).
+- `plans/` and `change_log/` files MUST use relative repository paths only and MUST NOT contain
+  **local system details** (OS user name, computer/host name, home or drive-letter paths, network
+  share names, LAN/internal IPs, local server URLs with ports, device serial numbers, personal
+  email addresses) or any secret (keys, tokens, passwords, keystore passphrases, credentials, PII).
+  These files are committed and may become public — write them as if a stranger will read them.
+  Full rule and bad → good examples:
+  [flutter_project_engineering_standard.md §21.1.1](flutter_project_engineering_standard.md).
+- `l10n.yaml` MUST exist at the project root and `lib/l10n/app_<base>.arb` MUST exist — for **every**
+  app, even one that ships a single language. All user-visible text MUST come from
+  `AppLocalizations`, never a raw string literal in a widget. ARB is the Flutter equivalent of
+  Android's `strings.xml`: create it from day one so adding a language later is only a new file.
 - `core/config/` MUST exist and hold `AppConfig` + `ConfigService` exactly as in §1.
 - The About screen lives under `screens/` (e.g. `screens/about_screen.dart`) and reads its
   values from `ConfigService` / `AppConfig` — it MUST NOT hard-code About text.
@@ -322,7 +332,11 @@ Rules:
 
 - [ ] Root `CLAUDE.md` exists at project root and follows [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md) (**MUST**).
 - [ ] Root `AGENTS.md` exists at project root and follows [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md) (**MUST**).
-- [ ] `plans/` and `change_log/` files use relative repository paths only and contain zero sensitive or internet-inappropriate data (**MUST**).
+- [ ] `plans/` and `change_log/` files use relative repository paths only and contain zero local
+      system details and zero sensitive data — safe to publish on the internet (**MUST**).
+- [ ] `l10n.yaml` exists at the project root and `lib/l10n/app_<base>.arb` exists (**MUST**, even
+      for a single-language app).
+- [ ] No hard-coded user-visible strings — all screen text comes from `AppLocalizations` (**MUST**).
 - [ ] `assets/config/app_config.json` exists with `appName`, `description`, `version`,
       `build`, `details`.
 - [ ] `assets/config/` registered under `flutter: assets:` in `pubspec.yaml`.

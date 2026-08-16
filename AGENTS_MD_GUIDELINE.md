@@ -207,6 +207,18 @@ flutter build appbundle --flavor prod --release \
 
 ---
 
+## Localization rules   <!-- mandatory for every app, even single-language -->
+
+- All user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations` — never a raw string
+  literal in a widget. This applies even though the app ships only <en>.
+- `l10n.yaml` (project root) and `lib/l10n/app_<base>.arb` must exist. Run `flutter gen-l10n`
+  after editing any `.arb` file.
+- Every ARB key needs an `@key` description entry.
+- Literals are allowed only for logs, non-UI exception messages, asset paths, route names, and
+  map/JSON keys.
+
+---
+
 ## Code style / naming
 
 - Files `snake_case.dart`; classes `PascalCase`; variables/methods `camelCase`;
@@ -258,11 +270,13 @@ Every change follows plan-before-changing and log-after-changing:
    project file (other than the plan). A question or ambiguous reply is not approval.
 2. **Log after changing.** After implementing, write a change log to `change_log/` named
    `yyyymmdd_hhMMss_<short-slug>.md` describing what changed and referencing its plan.
-3. **Relative paths & privacy only.** All `plans/` and `change_log/` files MUST use relative
-   repository paths only (never absolute system paths like `C:\...`, `l:\...`, or `file:///...`).
-   They MUST NOT contain any sensitive or private information that cannot be shared publicly on the
-   internet (secrets, API keys, tokens, passwords, keystore passphrases, local absolute paths,
-   internal IPs, credentials, or PII).
+3. **Relative paths & privacy only.** `plans/` and `change_log/` files are committed and may become
+   public on the internet. They MUST use relative repository paths only (never absolute system
+   paths like `C:\...`, `l:\...`, or `file:///...`). They MUST NOT contain any **local system
+   details** — OS user name, computer/host name, home or drive-letter paths, network share names,
+   LAN/internal IP addresses, local server URLs with ports, device serial numbers, personal email
+   addresses — or any secret (API keys, tokens, passwords, keystore passphrases, credentials, PII).
+   Write them as if a stranger will read them; nothing should reveal the machine they came from.
 
 Create `plans/` and `change_log/` if they do not exist.
 
@@ -300,8 +314,9 @@ In all Flutter repositories, `CLAUDE.md` and `AGENTS.md` exist side-by-side as m
 Two sections come from the user's global rules and must appear in **every** `AGENTS.md`, both
 profiles, worded the same in meaning:
 
-- **Workflow rules** — plan → approve → log, with relative repository paths only, no sensitive
-  internet-inappropriate data, `plans/` and `change_log/` naming, and the hard approval gate.
+- **Workflow rules** — plan → approve → log, with relative repository paths only, no local system
+  details and no sensitive internet-inappropriate data, `plans/` and `change_log/` naming, and the
+  hard approval gate.
 - **Communication rules** — always simple English.
 
 Do not shorten these into a single link. Keep the short inline version shown in the template so AI agents always see them, even in a Thin file.
@@ -335,6 +350,7 @@ Do not shorten these into a single link. Keep the short inline version shown in 
 - [ ] Identity table filled with real versions, minSdk, org id, connectivity stance.
 - [ ] Build commands are copy-paste ready and match the project's flavors.
 - [ ] Workflow rules (plan/approve/log) and simple-English rule are present, inline.
-- [ ] `plans/` and `change_log/` entries use relative paths only and contain zero sensitive data suitable for public internet sharing.
+- [ ] `plans/` and `change_log/` entries use relative paths only and contain zero local system details and zero sensitive data — safe to publish on the internet.
+- [ ] A localization rule is present: all user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations`, even if the app ships one language.
 - [ ] Every `<...>` placeholder from the template is replaced or its section deleted.
 - [ ] Rules in `AGENTS.md` match `CLAUDE.md` exactly.
