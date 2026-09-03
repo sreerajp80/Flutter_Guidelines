@@ -276,6 +276,105 @@ android/*.keystore
 Keep a secure, offline backup of each app's keystore. Losing it means you can no longer
 publish updates under the same signature.
 
+### 2.4 Production release build commands (Android)
+
+Every production build MUST be built using `--release`, `--obfuscate`, and `--split-debug-info`. Omitting any of these flags produces an unhardened, easily reverse-engineered artifact.
+
+#### Why these flags are required to secure the APK:
+1. **`--release`**: Enables AOT compiler optimizations, strips assertions and debug logic, and ensures `android:debuggable` is set to `false`.
+2. **`--obfuscate`**: Scrambles Dart class, method, and field identifiers into meaningless symbols within `libapp.so`, preventing trivial static analysis and decompilation of proprietary app logic.
+3. **`--split-debug-info=<path>`**: Strips and extracts the symbol table into a separate directory outside the APK. **Mandatory** when `--obfuscate` is enabled; without archived symbol files, crash stack traces from production cannot be decoded.
+4. **`--split-per-abi`** (for APKs): Builds separate native binaries per CPU architecture (`arm64-v8a`, `armeabi-v7a`, `x86_64`) rather than an oversized "fat" universal APK.
+5. **`appbundle`** (for Google Play): Builds an Android App Bundle (`.aab`), allowing Google Play to serve device-optimized APKs and leverage Google Play App Signing and Play Integrity protection.
+
+#### Ready-to-use production build examples
+
+##### Example 1: Standard App (No Flavors) — Split APKs (Direct Distribution / Sideloading)
+
+**Bash / macOS / Linux:**
+```bash
+flutter build apk \
+  --release \
+  --obfuscate \
+  --split-debug-info=build/symbols/android-release/ \
+  --split-per-abi
+```
+
+**PowerShell (Windows):**
+```powershell
+flutter build apk `
+  --release `
+  --obfuscate `
+  --split-debug-info=build/symbols/android-release/ `
+  --split-per-abi
+```
+*Output artifacts:* `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`, `app-armeabi-v7a-release.apk`, etc.
+
+##### Example 2: Standard App (No Flavors) — App Bundle (Google Play Store)
+
+**Bash / macOS / Linux:**
+```bash
+flutter build appbundle \
+  --release \
+  --obfuscate \
+  --split-debug-info=build/symbols/android-release/
+```
+
+**PowerShell (Windows):**
+```powershell
+flutter build appbundle `
+  --release `
+  --obfuscate `
+  --split-debug-info=build/symbols/android-release/
+```
+*Output artifact:* `build/app/outputs/bundle/release/app-release.aab`
+
+##### Example 3: Multi-Flavor App — Production Split APKs
+
+**Bash / macOS / Linux:**
+```bash
+flutter build apk \
+  --flavor prod \
+  --release \
+  --obfuscate \
+  --split-debug-info=build/symbols/android-prod/ \
+  --split-per-abi
+```
+
+**PowerShell (Windows):**
+```powershell
+flutter build apk `
+  --flavor prod `
+  --release `
+  --obfuscate `
+  --split-debug-info=build/symbols/android-prod/ `
+  --split-per-abi
+```
+*Output artifacts:* `build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk`, etc.
+
+##### Example 4: Multi-Flavor App — Production App Bundle (Google Play Store)
+
+**Bash / macOS / Linux:**
+```bash
+flutter build appbundle \
+  --flavor prod \
+  --release \
+  --obfuscate \
+  --split-debug-info=build/symbols/android-prod/
+```
+
+**PowerShell (Windows):**
+```powershell
+flutter build appbundle `
+  --flavor prod `
+  --release `
+  --obfuscate `
+  --split-debug-info=build/symbols/android-prod/
+```
+*Output artifact:* `build/app/outputs/bundle/prodRelease/app-prod-release.aab`
+
+> **Symbol Archive Reminder**: Always archive `build/symbols/` immediately after every production build to a secure backup. Without it, production crash stack traces are permanently unreadable.
+
 ---
 
 ## 3. Standard `lib/` folder structure
@@ -347,4 +446,6 @@ Rules:
 - [ ] About screen renders `details` dynamically (loops the map, no hard-coded field names).
 - [ ] Release keystore is at `android/<name>.jks`; `android/key.properties` points to it.
 - [ ] `android/key.properties`, `android/*.jks`, `android/*.keystore` are git-ignored.
+- [ ] Production builds run with `--release`, `--obfuscate`, and `--split-debug-info` (§2.4).
+- [ ] Debug symbols archived securely alongside release artifacts.
 - [ ] `lib/` follows the baseline layout in §3 (subset is fine for small apps).

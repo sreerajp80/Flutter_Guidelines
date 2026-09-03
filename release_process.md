@@ -144,31 +144,82 @@ Size budgets (from engineering standard):
 | Android AAB download | < 20 MB | 40 MB |
 | Windows MSIX | < 80 MB | 150 MB |
 
-### 6.4 Debuggable Verification (Android)
+### 6.4 Debuggable And Backup Verification (Android)
 
-Verify that `android:debuggable` is `false` in the merged release manifest before every
-production release. A debuggable production build is a security vulnerability and a Google Play
-policy violation.
+Verify that both `android:debuggable` and `android:allowBackup` are explicitly safe in the merged
+release manifest before every production release.
+
+1. **`android:debuggable=false`**: A debuggable release build allows an attacker to attach a
+   debugger via ADB, inspect memory, execute arbitrary code, and bypass application controls.
+   It is also a Google Play policy violation.
+2. **`android:allowBackup=false`**: If `allowBackup` is enabled (`true`), an attacker with physical
+   or ADB access to an unlocked device can execute `adb backup` and pull the entire application sandbox
+   (including databases, shared preferences, and internal files) without root. For apps handling
+   sensitive user data, `android:allowBackup` MUST be `false` (or strictly restricted via `fullBackupContent`).
 
 Check via `aapt2`:
 
 ```bash
 # bash / zsh
-aapt2 dump badging build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk \
-  | grep -i debuggable
+APK="build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk"
+# Check debuggable (must be absent or false)
+aapt2 dump badging "$APK" | grep -i debuggable
+# Check allowBackup (search manifest)
+aapt2 dump xmltree "$APK" --file AndroidManifest.xml | grep -i allowBackup
 ```
 
 ```powershell
 # PowerShell (Windows)
-aapt2 dump badging build\app\outputs\apk\prod\release\app-arm64-v8a-prod-release.apk `
-  | Select-String -Pattern debuggable
+$APK = "build\app\outputs\apk\prod\release\app-arm64-v8a-prod-release.apk"
+# Check debuggable (must be absent or false)
+aapt2 dump badging $APK | Select-String -Pattern "debuggable"
+# Check allowBackup
+aapt2 dump xmltree $APK --file AndroidManifest.xml | Select-String -Pattern "allowBackup"
 ```
 
-Expected output: no `application-debuggable` line present (the attribute defaults to false when
-absent). If it appears, investigate `buildTypes.release.isDebuggable` in `build.gradle.kts`.
+**Expected results:**
+- `debuggable`: No `application-debuggable` line present (defaults to false when absent).
+- `allowBackup`: `android:allowBackup(0x...)=0x0` (false) or absent with explicit application-level exclusion.
 
-Alternatively, inspect the merged manifest in Android Studio:
-Build → Analyze APK → Select APK → AndroidManifest.xml → confirm `debuggable` is absent or false.
+Alternatively, inspect in Android Studio:
+Build → Analyze APK → Select APK → AndroidManifest.xml → confirm `debuggable` is absent/false and `allowBackup` is false.
+
+### 6.5 Network Security Configuration And Cleartext Traffic
+
+Verify that cleartext HTTP traffic is disabled for production builds:
+- Ensure `android:usesCleartextTraffic="false"` in the merged manifest (enforced by default on Android 9+ / API 28+).
+- If `android:networkSecurityConfig` is defined in `res/xml/network_security_config.xml`, verify:
+  - `<base-config cleartextTrafficPermitted="false">` is in place.
+  - In production builds, no `<trust-anchors>` allow user-installed certificates (which would enable easy MITM proxy inspection via tools like Charles, Proxyman, or Burp Suite).
+
+### 6.6 Pre-Release Asset And Secret Leak Audit
+
+While `--obfuscate` scrambles compiled Dart logic in `libapp.so`, **files in the APK's `assets/` and `res/` directories remain completely unencrypted**. Any party with access to the APK can inspect its contents with `unzip` or `apktool`.
+
+Before releasing, audit the bundled assets in the APK:
+
+```bash
+# bash / zsh
+unzip -l build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk "assets/*"
+```
+
+```powershell
+# PowerShell (Windows)
+tar -tf build\app\outputs\apk\prod\release\app-arm64-v8a-prod-release.apk | Select-String "assets/"
+```
+
+**Audit checklist:**
+- [ ] No `.env`, `.env.production`, or secret credentials files are packaged in `assets/`.
+- [ ] No private keys, `.pem`, `.p12`, or test keystores exist in assets.
+- [ ] No raw database files containing seed customer or internal test data are bundled.
+- [ ] Only declared runtime config (e.g., `assets/config/app_config.json`) is included.
+
+### 6.7 Exported Component Audit
+
+Inspect all declared activities, services, and broadcast receivers in the merged manifest:
+- Every component with an `<intent-filter>` automatically requires an explicit `android:exported` attribute.
+- Components intended strictly for internal app usage MUST specify `android:exported="false"`.
+- If an activity or receiver must be exported (e.g., deep linking or OAuth callback), ensure it enforces proper input validation and permission controls.
 
 ---
 
@@ -214,8 +265,12 @@ Complete these items before every release.
 
 - [ ] `--obfuscate` and `--split-debug-info` applied to all release builds.
 - [ ] Debug symbols archived securely for this version.
-- [ ] ProGuard rules verified (Android).
+- [ ] ProGuard / R8 rules verified (Android).
 - [ ] `android:debuggable=false` confirmed in merged release manifest (Android).
+- [ ] `android:allowBackup=false` (or strict exclusion) verified in merged release manifest (Android).
+- [ ] Cleartext traffic disabled (`usesCleartextTraffic=false`) and network security config verified.
+- [ ] Pre-release asset audit passed — no `.env`, keys, or mock data bundled in APK `assets/` (§6.6).
+- [ ] Manifest component export audit completed — no accidental `android:exported="true"` (§6.7).
 - [ ] Manifest and permission review completed — no unnecessary permissions.
 - [ ] OWASP Mobile Top 10 checklist reviewed (see `docs/security.md`).
 - [ ] Secrets, keys, and backup settings reviewed if applicable.
@@ -247,41 +302,126 @@ Complete these items before every release.
 3. Fetch dependencies: `flutter pub get`.
 4. Run code generation: `dart run build_runner build --delete-conflicting-outputs`.
 5. Run format, analyze, and test checks.
-6. Build the required Android artifacts with all hardening flags.
+6. Build the required Android production artifacts with all hardening flags (`--release`, `--obfuscate`, `--split-debug-info`, `--split-per-abi` or `appbundle`).
 7. Run size analysis and record output.
-8. Verify `android:debuggable=false` in the merged manifest.
-9. Verify artifact naming, installability, and environment on a physical or emulated device.
-10. Archive debug symbols from `build/symbols/`.
-11. Upload to the intended distribution channel.
-12. Tag the release in git: `git tag v<version>` and push.
+8. Verify `android:debuggable=false` and `android:allowBackup=false` in the merged manifest (§6.4).
+9. Perform pre-release asset extraction audit to ensure no secrets were packaged in `assets/` (§6.6).
+10. Verify artifact naming, installability, and environment on a physical or emulated device.
+11. Archive debug symbols from `build/symbols/` to the secure archive location.
+12. Upload to the intended distribution channel (Play Store console or secure internal repository).
+13. Tag the release in git: `git tag v<version>` and push.
 
-### Android Build Commands
+### Android Build Commands & Examples
 
+#### A. Multi-Flavor App (`prod` Flavor)
+
+**Bash / macOS / Linux:**
 ```bash
+# 1. Pre-build checks
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test
 
-# Split APKs for direct distribution
+# 2. Build Split APKs for direct distribution
+VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2)
 flutter build apk \
   --flavor prod \
   --release \
   --obfuscate \
-  --split-debug-info=build/symbols/android-prod-$(cat pubspec.yaml | grep '^version:' | cut -d' ' -f2)/ \
+  --split-debug-info=build/symbols/android-prod-$VERSION/ \
   --split-per-abi
 
-# App Bundle for Google Play
+# 3. Build App Bundle for Google Play Store
 flutter build appbundle \
   --flavor prod \
   --release \
   --obfuscate \
-  --split-debug-info=build/symbols/android-prod-$(cat pubspec.yaml | grep '^version:' | cut -d' ' -f2)/
+  --split-debug-info=build/symbols/android-prod-$VERSION/
 
-# Size analysis
-flutter build apk --flavor prod --release \
-  --analyze-size
+# 4. Size analysis
+flutter build apk --flavor prod --release --analyze-size
+```
+
+**PowerShell (Windows):**
+```powershell
+# 1. Pre-build checks
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+
+# 2. Extract version from pubspec.yaml
+$VERSION = (Get-Content pubspec.yaml | Select-String '^version:').ToString().Split(' ')[1].Trim()
+
+# 3. Build Split APKs for direct distribution
+flutter build apk `
+  --flavor prod `
+  --release `
+  --obfuscate `
+  --split-debug-info="build/symbols/android-prod-$VERSION/" `
+  --split-per-abi
+
+# 4. Build App Bundle for Google Play Store
+flutter build appbundle `
+  --flavor prod `
+  --release `
+  --obfuscate `
+  --split-debug-info="build/symbols/android-prod-$VERSION/"
+
+# 5. Size analysis
+flutter build apk --flavor prod --release --analyze-size
+```
+
+#### B. Standard App (No Flavors)
+
+**Bash / macOS / Linux:**
+```bash
+VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2)
+
+# Build Split APKs
+flutter build apk \
+  --release \
+  --obfuscate \
+  --split-debug-info=build/symbols/android-$VERSION/ \
+  --split-per-abi
+
+# Build App Bundle for Google Play
+flutter build appbundle \
+  --release \
+  --obfuscate \
+  --split-debug-info=build/symbols/android-$VERSION/
+```
+
+**PowerShell (Windows):**
+```powershell
+$VERSION = (Get-Content pubspec.yaml | Select-String '^version:').ToString().Split(' ')[1].Trim()
+
+# Build Split APKs
+flutter build apk `
+  --release `
+  --obfuscate `
+  --split-debug-info="build/symbols/android-$VERSION/" `
+  --split-per-abi
+
+# Build App Bundle for Google Play
+flutter build appbundle `
+  --release `
+  --obfuscate `
+  --split-debug-info="build/symbols/android-$VERSION/"
+```
+
+#### C. Post-Build APK Verification Commands
+
+```bash
+# Verify no debuggable flag and verify allowBackup=false
+aapt2 dump badging build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk | grep -i debuggable
+aapt2 dump xmltree build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk --file AndroidManifest.xml | grep -i allowBackup
+
+# Audit asset bundle for unencrypted secrets
+unzip -l build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk "assets/*"
 ```
 
 ---

@@ -7,7 +7,7 @@ It is a **living release playbook** for your Flutter app. Unlike `architecture.m
 - The version format and how build numbers increment (Section 3)
 - Branch and merge policy, including hotfix strategy (Section 4)
 - The flavor × mode matrix for `dev` and `prod` builds across platforms (Section 5)
-- Mandatory release-build hardening — `--obfuscate`, `--split-debug-info`, R8/ProGuard rules, app size analysis, and the `android:debuggable=false` verification (Section 6)
+- Mandatory release-build hardening — `--obfuscate`, `--split-debug-info`, R8/ProGuard rules, app size analysis, and Android manifest/asset security verifications (`debuggable=false`, `allowBackup=false`, cleartext traffic, asset audit) (Section 6)
 - Signing material handling and keystore backup policy (Section 7)
 - The full pre-release checklist split across Code & Quality, Performance, Security, Product & Documentation, and Artifact Validation (Section 8)
 - Step-by-step Android, iOS, and Windows release procedures with exact build commands (Sections 9–11)
@@ -49,7 +49,7 @@ Most of `release_process.md` is filled out **before the first release**, not bef
 | 🟡 Soon | **§2 Roles & Responsibilities** | Even for a single-developer project, write down "I am the release owner, QA, and store uploader" — it forces the question of whether one person should hold all four roles |
 | 🟡 Soon | **§4 Branch & Merge Policy** | Before the first PR is opened — protects `main` from accidental direct pushes |
 | 🟡 Soon | **§6.2 ProGuard Rules** | Before the first `flutter build apk --release` — R8 silently strips reflection-accessed classes and the failure only shows up in release builds |
-| 🟡 Soon | **§6.4 Debuggable Verification** | The `aapt2` check command should be ready before the first prod build — verifying it manually after release is already too late |
+| 🟡 Soon | **§6.4–§6.6 Security Verification** | The `aapt2` debuggable/backup checks and pre-release asset leak audit should be ready before the first prod build — verifying manually after release is already too late |
 | 🟢 Later | **§8 Release Checklist** | Walk through before every release |
 | 🟢 Later | **§9–§11 Platform Steps** | Refer to during each platform's release |
 | 🟢 Later | **§12 Distribution Channels** | Fill when distribution channels are chosen (Play Store, TestFlight, sideload, MSIX, etc.) |
@@ -105,7 +105,7 @@ Rule N: Read docs/release_process.md before suggesting any release build command
   - Hotfixes follow the same checklist as full releases. No exceptions.
 
   Verification rules:
-  - For Android prod builds, suggest the aapt2 debuggable verification step.
+  - For Android prod builds, suggest the aapt2 debuggable/backup verification and asset audit steps.
   - For Windows prod builds, suggest installing on a clean VM (not the dev machine).
 ```
 
