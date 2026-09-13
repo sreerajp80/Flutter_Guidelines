@@ -277,6 +277,15 @@ android {
         }
     }
 
+    bundle {
+        language {
+            // REQUIRED (engineering standard §8.1). Play splits App Bundles by language
+            // by default, so a phone set to English would get no Malayalam or Sanskrit
+            // resources, and the in-app language picker could not switch to them.
+            enableSplit = false
+        }
+    }
+
     flavorDimensions += "environment"
     productFlavors {
         create("dev") {

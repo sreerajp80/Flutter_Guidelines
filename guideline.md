@@ -382,7 +382,6 @@ Reference widget — `lib/widgets/made_with_love.dart`:
 class MadeWithLove extends StatelessWidget {
   const MadeWithLove({super.key});
 
-  static const String _heart = '❤';
   static const Color _heartColor = Color(0xFFE53935);
 
   @override
@@ -408,7 +407,14 @@ class MadeWithLove extends StatelessWidget {
             TextSpan(
               children: [
                 TextSpan(text: parts.first, style: base),
-                TextSpan(text: _heart, style: base.copyWith(color: _heartColor)),
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.middle,
+                  child: Icon(
+                    Icons.favorite,
+                    size: (base.fontSize ?? 12) * 1.1,
+                    color: _heartColor,
+                  ),
+                ),
                 TextSpan(text: parts.length > 1 ? parts[1] : '', style: base),
               ],
             ),
@@ -420,6 +426,12 @@ class MadeWithLove extends StatelessWidget {
   }
 }
 ```
+
+> **Why `WidgetSpan` and not a character.** Rendering the heart as an emoji or text glyph
+> (`❤`) lets OEM system fonts (e.g. on Samsung or Xiaomi devices) override the character with a
+> platform-specific emoji glyph, ignoring the text colour. `WidgetSpan` with `Icon(Icons.favorite)`
+> guarantees an exact vector heart in `#E53935` red on every screen and OS version.
+
 
 > **Note on other constants.** This JSON pattern is only for **About-screen** metadata.
 > Technical constants (database names, preference keys, thresholds, channel IDs) do NOT
@@ -652,6 +664,8 @@ Rules:
       delegate is installed (**MUST**, engineering standard §8.3).
 - [ ] Settings has a language picker (System default / English / മലയാളം / संस्कृतम्) that persists
       and applies without a restart (**MUST**, §8.4).
+- [ ] `android/app/build.gradle.kts` disables language splitting (`bundle.language.enableSplit = false`)
+      so in-app language switches work on Play Store downloads (**MUST**, engineering standard §8.1).
 - [ ] `app_sa.arb` passes the Sanskrit quality check — no Hindi markers (**MUST**, §8.5).
 - [ ] Menu / label / button / tab text is within the length budget in all three languages
       (**MUST**, §8.6).

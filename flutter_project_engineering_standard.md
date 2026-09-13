@@ -991,6 +991,21 @@ synthetic-package: false
 import clarity); leaving the default `true` writes it into the synthetic `flutter_gen` package.
 Pick one and document the choice.
 
+**Android App Bundle language splitting MUST be disabled** in `android/app/build.gradle.kts` (or `build.gradle`):
+
+```kotlin
+// android/app/build.gradle.kts
+android {
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
+}
+```
+
+Google Play defaults to language splitting when delivering Android App Bundles (.aab). If a user downloads the app on an English phone, Play only installs English resources. If the user later switches to Malayalam or Sanskrit inside the app, the strings will be missing. Setting `enableSplit = false` ensures that the bundle retains all language resources on the device.
+
 ### 8.2 String Externalization (Mandatory, All Apps)
 
 Every app MUST externalize its user-visible strings into ARB files. This is not optional and does
@@ -1305,16 +1320,21 @@ who does not read it. Never use Hindi anywhere as a substitute, crutch, or fallb
   - Do not use Hindi loanwords for concepts that have native Sanskrit terms (use `उपयोक्तृविवरणम्` for Account, never Hindi `खाता`; `लेखा` strictly means a line/furrow).
   - Use `ध्वनिः` for audio/sound to avoid confusion with `शब्दः` (Word).
 - **Form conventions**:
-  - A button or menu item (action commanding the app): polite imperative passive (`कर्मणि लोट्`, `-ताम्`), e.g. `रक्ष्यताम्` (Save), `अन्विष्यताम्` (Search).
+  - A button or menu item (action commanding the app): polite `-ताम्` imperative (`लोट्`). For a verb
+    that takes an object it is passive (`कर्मणि`), e.g. `रक्ष्यताम्` (Save), `अन्विष्यताम्` (Search); for a
+    verb that takes no object it is impersonal (`भावे`), e.g. `निष्क्रम्यताम्` (Exit).
   - A title, tab, label, heading, or status: nominal / abstract noun, e.g. `अन्वेषणम्` (Search), `विन्यासः` (Settings).
   - A confirmation or boolean response: indeclinable, e.g. `आम्` (Yes), `न` (No), `अस्तु` (OK).
+  - Direction words (Back, Next, Previous, More) are nominal or adverbial labels and MAY keep that
+    form on a button, like Yes / No. Close and Exit are actions: on a button they MUST use the
+    imperative (`पिधीयताम्`, `निष्क्रम्यताम्`); the nominal form (`निष्क्रमणम्`) is for titles and labels.
 - **Punctuation**: Use the **daṇḍa** `।` to end a sentence in descriptive prose; UI labels take no terminator.
 - **Locale marker**: Always set `"@@locale": "sa"` at the top of `app_sa.arb`.
 - **Pre-release review**: Machine translation tools commonly output Hindi for Sanskrit requests. All
   Sanskrit ARB entries MUST be reviewed before release.
 
-**Forbidden markers.** None of these tokens may appear anywhere in `app_sa.arb`. They are reliable
-Hindi giveaways and make a good grep-based gate:
+**Forbidden markers.** None of these tokens may appear anywhere in `app_sa.arb`, `assets/config/app_config.json`,
+or any `*_sa.*` asset file. They are reliable Hindi giveaways and make a good grep-based gate:
 
 ```text
 है  हैं  था  थे  थी  हूं  हो  करें  करना  करके  रहा  रही  रहे  गया  गयी  चाहिए
@@ -1323,19 +1343,43 @@ Hindi giveaways and make a good grep-based gate:
 ```
 
 ```bash
-# CI gate: fail the build if any Hindi marker appears in the Sanskrit ARB.
+# CI gate: fail the build if any Hindi marker appears in the Sanskrit ARB,
+# app_config.json, or Sanskrit asset files.
 # Uses PCRE (-P) with lookarounds so standalone copulas/words are not confused with
 # legitimate Sanskrit roots (e.g. स्थाप्यताम्, स्थानम्) or indeclinables (यथा, तथा, कथा).
-LC_ALL=C.UTF-8 grep -nP '(?<=[\s"'\''([{।,]|^)(?:था|थे|थी|हो|है|हैं|हूं|और)(?=[\s"'\''\)\]}।,.\?!]|$)|करें|करना|करके|रहा|रही|रहे|गया|गयी|चाहिए|नहीं|लेकिन|क्या|कृपया|सेटिंग्स|ऐप|\x{093C}|[\x{0958}-\x{095F}]' \
-  lib/l10n/app_sa.arb && { echo 'Hindi markers found in app_sa.arb'; exit 1; } || exit 0
+# Word edges: whitespace, quotes, brackets, punctuation, daṇḍa, XML/HTML tag edges (< >),
+# and Markdown marks (* _ ` # | : ; ~ -) so help files in Markdown are checked too.
+PATTERN='(?<=[\s"'\''([{<>।,*_`#|:;~-]|^)(?:था|थे|थी|हो|है|हैं|हूं|और)(?=[\s"'\''\)\]}<>।,.\?!*_`#|:;~-]|$)|करें|करना|करके|रहा|रही|रहे|गया|गयी|चाहिए|नहीं|लेकिन|क्या|कृपया|सेटिंग्स|ऐप|\x{093C}|[\x{0958}-\x{095F}]'
+
+mapfile -t FILES < <(find . -path '*/build' -prune -o -type f \( \
+    -name 'app_sa.arb' -o \
+    -path '*/assets/*_sa.*' -o \
+    -path '*/assets/config/app_config.json' \) -print)
+
+if [ "${#FILES[@]}" -eq 0 ]; then
+  echo 'No Sanskrit files found — every app ships app_sa.arb.'; exit 1
+fi
+
+# Self-test: the pattern must still catch a Hindi copula in ARB/JSON, XML and Markdown text.
+for sample in '"greeting": "है"' '<b>है</b>' 'यह **है**' 'यह `है`' 'वह *था*'; do
+  if ! printf '%s\n' "$sample" | LC_ALL=C.UTF-8 grep -qP "$PATTERN"; then
+    echo "Sanskrit check self-test failed on: $sample"; exit 1
+  fi
+done
+
+if LC_ALL=C.UTF-8 grep -nP "$PATTERN" "${FILES[@]}"; then
+  echo 'Hindi markers found in Sanskrit text (standard 8.5).'; exit 1
+fi
+exit 0
 ```
 
 > The gate is a smoke test, not a proof of correctness: passing it means no obvious Hindi marker is
 > present, not that the Sanskrit is good. Human review still applies.
-> Standalone copulas/words like था, थे, थी, हो, है, हैं, हूं, और are matched with boundary lookarounds
-> on whitespace, quotes, brackets, and punctuation (including daṇḍa `।`).
-> This ensures legitimate Sanskrit roots like स्था (`स्थाप्यताम्`, `स्थानम्`, `पुनःस्थाप्यताम्`) and
-> indeclinables like `यथा`, `तथा`, `कथा` never trigger false-positive build failures.
+> Standalone words (था, थे, थी, हो, है, हैं, हूं, और) match only between word edges: whitespace,
+> quotes, brackets, punctuation (including the daṇḍa `।`), the tag edges `<` and `>`, and the
+> Markdown marks `*`, `_`, `` ` ``, `#`, `|`, `:`, `;`, `~`, `-`. So `यह **है**` in a help file fails
+> the build, while legitimate Sanskrit such as `स्थाप्यताम्`, `स्थानम्`, `पुनःस्थाप्यताम्`, `यथा`,
+> `तथा` and `कथा` never does.
 
 
 #### 8.5.2 Malayalam Quality Rules (Natural Malayalam, Not English Transliterations)
@@ -1363,7 +1407,7 @@ Malayalam UI strings must sound natural and idiomatic to native Malayalam speake
     `അല്ല` on a confirmation prompt's "No" button when the dialog asks if an action should be done.
 - **Avoid ungrammatical standalone postpositions**: Postpositions like `കുറിച്ച്` govern an accusative
   noun (e.g. `ആപ്പിനെക്കുറിച്ച്`); standing alone as a screen title or heading, `കുറിച്ച്` is
-  ungrammatical. Use `വിവരണം` or `ആപ്പിനെക്കുറിച്ച്` for "About".
+  ungrammatical. Use `ആപ്പിനെക്കുറിച്ച്` for "About"; `വിവരണം` is reserved for Description.
 - **Contextual accuracy over literal calques**:
   - Preferences: `താൽപ്പര്യങ്ങൾ` or `ഇഷ്ടങ്ങൾ` (matches Sanskrit `रुचयः`). `മുൻഗണനകൾ` strictly means
     **Priorities** (precedence/rank) and is a misleading false friend.
@@ -1386,13 +1430,17 @@ Malayalam UI strings must sound natural and idiomatic to native Malayalam speake
 | Preferences | प्रेफरेंसेस / മുൻഗണനകൾ | रुचयः | താൽപ്പര്യങ്ങൾ / ഇഷ്ടങ്ങൾ | `മുൻഗണനകൾ` means priorities, not preferences |
 | Confirm | संपुष्यताम् / കൺഫേം | स्थिरीक्रियताम् / दृढीक्रियताम् | സ്ഥിരീകരിക്കുക | `पुष्` means nourish; `स्थिरी` means confirm |
 | Print | प्रिंट करें / പ്രിന്റ് | मुद्र्यताम् | അച്ചടിക്കുക | Standard Malayalam verb |
-| About | ऐप के बारे में / കുറിച്ച് | परिचयः | വിവരണം | `കുറിച്ച്` is a bound postposition, not a title; `विषये` is locative ("regarding"), use `परिचयः` for "About". |
+| About | ऐप के बारे में / കുറിച്ച് / परिचयः | विषयपरिचयः | ആപ്പിനെക്കുറിച്ച് | `കുറിച്ച്` is a bound postposition, not a title; `विषये` is locative ("regarding"). One term per meaning: `परिचयः` is Profile and `വിവരണം` is Description (8.5.4). |
 
 #### 8.5.4 Standard UI Glossary
 
 Use these exact terms across all apps, in all three languages. When a term you need is missing, add it
 **here**, in this standard, rather than inventing inconsistent per-app variants. All short UI terms
 MUST fit within the 22-character limit defined in Section 8.6.
+
+**Review rule.** A new or changed Malayalam or Sanskrit glossary term MUST be reviewed by a fluent
+reader before any app uses it. The change that adds the term lists it in its change log as
+"needs native-reader review" until that review is done.
 
 ##### Navigation and structure
 
@@ -1405,7 +1453,8 @@ MUST fit within the 22-character limit defined in Section 8.6.
 | Menu | മെനു | सूची |
 | More | കൂടുതൽ | अधिकम् |
 | Close | അടയ്ക്കുക | पिधीयताम् |
-| Exit | പുറത്തുകടക്കുക | निष्क्रमणम् |
+| Exit (button) | പുറത്തുകടക്കുക | निष्क्रम्यताम् |
+| Exit (title, label) | പുറത്തുകടക്കൽ | निष्क्रमणम् |
 | Profile | പ്രൊഫൈൽ | परिचयः |
 | Notifications | അറിയിപ്പുകൾ | सूचनाः |
 | Favorites | പ്രിയപ്പെട്ടവ | प्रियाणि |
@@ -1575,9 +1624,9 @@ MUST fit within the 22-character limit defined in Section 8.6.
 | Terms | നിബന്ധനകൾ | नियमाः |
 | Privacy policy | സ്വകാര്യതാ നയം | गोपनीयतानीतिः |
 
-> One entry exceeds the short-label budget in 8.6 on purpose — `प्रयुक्ता कृत्रिमबुद्धिः`
-> (24 characters) is an About-screen row label, which wraps to two lines acceptably. Do not
-> copy that liberty into a toolbar or a tab.
+> About-screen row labels use the `aboutDetail<Key>` pattern (`guideline.md` §1.6), which is exempt
+> from the 8.6 budget, so a long row label may wrap to two lines. Do not copy that liberty into a
+> toolbar or a tab.
 
 ### 8.6 Label Conciseness (Short UI Text vs. Descriptive Text)
 
@@ -1594,6 +1643,11 @@ app-bar titles, list-row labels, form-field labels, switch/checkbox labels, dial
 | Malayalam | 1–2 words | 22 characters |
 | Sanskrit | 1 word (nominal form preferred) | 22 characters |
 
+**How characters are counted.** A character is a visible character (a grapheme cluster), not a
+code unit: a vowel sign or virama belongs to the letter before it. Count using Dart's
+`characters.length` (`package:characters`, which is bundled with Flutter): `string.characters.length`.
+Every term in the 8.5.4 glossary fits within the budget.
+
 Rules:
 
 - Prefer a single word. Drop articles and filler: "Delete" not "Delete this item".
@@ -1609,7 +1663,8 @@ Rules:
 
 **Descriptive text is exempt** from the budget — and MUST still be complete, natural prose in all
 three languages: onboarding copy, empty-state explanations, help text, About `description`, error
-explanations, confirmation dialog bodies, notification bodies, tutorial content.
+explanations, confirmation dialog bodies, notification bodies, tutorial content. About-screen row labels
+(`aboutDetail<Key>`) are also exempt from this budget so they can wrap to two lines.
 
 **ARB key naming makes the category checkable.** Prefix every key so the budget can be enforced
 mechanically:
@@ -1621,7 +1676,7 @@ mechanically:
 | `title…` | screen / app-bar / dialog titles | short |
 | `tab…`, `nav…` | tabs and navigation destinations | short |
 | `tooltip…` | tooltips on icon-only controls (7.8) | short |
-| `desc…`, `help…`, `empty…`, `error…`, `body…` | descriptive prose | exempt |
+| `desc…`, `help…`, `empty…`, `error…`, `body…`, `aboutDetail…` | descriptive prose & About row labels | exempt |
 
 ```dart
 // test/l10n/label_length_test.dart — fails when a short key exceeds its budget.
@@ -1641,28 +1696,131 @@ A feature is **not done** until it works fully in English, Malayalam and Sanskri
   notification text, share sheets, exported file headers a user sees, and the About screen.
 - Feature-level content shipped as an asset (JSON, Markdown help pages, seed data a user reads)
   MUST also carry all three languages, or the screen that shows it MUST resolve a per-language
-  asset (`assets/content/help_<lang>.md`).
+  asset (`assets/content/help_<lang>.md`). `app_config.json` prose fields (`appName`, `description`,
+  `details`) must provide all three `{"en","ml","sa"}` entries.
 - Screenshots for a release are taken in all three languages when the feature changes layout.
 - Widget tests for a screen MUST run in all three locales (pump with `locale: Locale('ml')` and
   `Locale('sa')`), asserting no overflow and no untranslated English leaking through.
 
-**Key parity test** — required in every app:
+**Translation parity test** — required in every app:
 
 ```dart
-// test/l10n/arb_parity_test.dart
+// test/l10n/translation_parity_test.dart
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+
 void main() {
-  test('every ARB file has the same keys as the template', () {
-    final en = _keys('lib/l10n/app_en.arb');
-    for (final locale in ['ml', 'sa']) {
-      final other = _keys('lib/l10n/app_$locale.arb');
-      expect(other.difference(en), isEmpty, reason: 'extra keys in $locale');
-      expect(en.difference(other), isEmpty, reason: 'missing keys in $locale');
-    }
+  const locales = ['ml', 'sa'];
+
+  /// Strings allowed to match English: brand names and symbols. Keep this list short.
+  const sameAsEnglishAllowed = <String>{};
+
+  group('ARB parity tests', () {
+    test('every ARB file has the same keys as the template', () {
+      final en = _keys('lib/l10n/app_en.arb');
+      for (final locale in locales) {
+        final other = _keys('lib/l10n/app_$locale.arb');
+        expect(other.difference(en), isEmpty, reason: 'extra keys in $locale');
+        expect(en.difference(other), isEmpty, reason: 'missing keys in $locale');
+      }
+    });
+
+    test('no translation is a copy of the English value', () {
+      final enStrings = _strings('lib/l10n/app_en.arb');
+      final problems = <String>[];
+      for (final locale in locales) {
+        final other = _strings('lib/l10n/app_$locale.arb');
+        for (final entry in other.entries) {
+          final key = entry.key;
+          final value = entry.value;
+          if (sameAsEnglishAllowed.contains(key)) continue;
+          if (value == enStrings[key] && value.trim().isNotEmpty) {
+            problems.add('lib/l10n/app_$locale.arb: $key is untranslated (matches English)');
+          }
+        }
+      }
+      expect(problems, isEmpty, reason: problems.join('\n'));
+    });
+
+    test('aboutMadeWithLove keeps the {heart} marker in all three languages', () {
+      for (final locale in ['en', ...locales]) {
+        final strings = _strings('lib/l10n/app_$locale.arb');
+        final text = strings['madeWithLove'] ?? strings['aboutMadeWithLove'];
+        if (text != null) {
+          expect(text.contains('{heart}'), isTrue,
+              reason: 'app_$locale.arb madeWithLove is missing the {heart} marker');
+        }
+      }
+    });
   });
 
-  test('no translation is a copy of the English value', () {
-    // Flags untranslated placeholders. Allow-list proper nouns and
-    // language-independent values (app name, brand, symbols) explicitly.
+  group('About JSON config parity tests', () {
+    test('app_config.json has all three languages and valid detail labels', () {
+      final file = File('assets/config/app_config.json');
+      if (!file.existsSync()) return; // Pattern B app (no assets config)
+
+      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      final enKeys = _keys('lib/l10n/app_en.arb');
+      final problems = <String>[];
+
+      void checkLanguages(String path, dynamic value) {
+        if (value is Map<String, dynamic>) {
+          for (final lang in ['en', 'ml', 'sa']) {
+            final text = value[lang]?.toString().trim() ?? '';
+            if (text.isEmpty) {
+              problems.add('$path.$lang is missing or empty');
+            }
+          }
+        }
+      }
+
+      checkLanguages('appName', json['appName']);
+      checkLanguages('description', json['description']);
+
+      final details = json['details'];
+      if (details is Map<String, dynamic>) {
+        for (final entry in details.entries) {
+          final id = entry.key;
+          checkLanguages('details.$id', entry.value);
+
+          // Details key is lowerCamelCase; label in ARB is aboutDetail<Key>
+          final labelKey = 'aboutDetail${id[0].toUpperCase()}${id.substring(1)}';
+          if (!enKeys.contains(labelKey)) {
+            problems.add('details.$id has no corresponding ARB key "$labelKey"');
+          }
+        }
+      }
+
+      expect(problems, isEmpty, reason: problems.join('\n'));
+    });
+  });
+
+  group('Content asset parity tests', () {
+    test('content and help assets exist in all three languages', () {
+      final assetsDir = Directory('assets');
+      if (!assetsDir.existsSync()) return;
+
+      final problems = <String>[];
+      final enFiles = assetsDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => RegExp(r'_en\.[^.]+$').hasMatch(f.path));
+
+      for (final enFile in enFiles) {
+        for (final lang in locales) {
+          final twinPath = enFile.path.replaceAllMapped(
+            RegExp(r'_en(\.[^.]+)$'),
+            (match) => '_$lang${match[1]}',
+          );
+          if (!File(twinPath).existsSync()) {
+            problems.add('Missing localized asset: $twinPath (matching ${enFile.path})');
+          }
+        }
+      }
+
+      expect(problems, isEmpty, reason: problems.join('\n'));
+    });
   });
 }
 
@@ -1671,6 +1829,14 @@ Set<String> _keys(String path) =>
         .keys
         .where((k) => !k.startsWith('@'))
         .toSet();
+
+Map<String, String> _strings(String path) {
+  final map = jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
+  return {
+    for (final e in map.entries)
+      if (!e.key.startsWith('@')) e.key: e.value.toString(),
+  };
+}
 ```
 
 ### 8.8 RTL Layout Support

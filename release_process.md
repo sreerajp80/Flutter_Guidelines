@@ -279,7 +279,7 @@ Complete these items before every release.
 
 ### Localization
 
-- [ ] `app_en.arb`, `app_ml.arb` and `app_sa.arb` all present; ARB key parity test passes.
+- [ ] `app_en.arb`, `app_ml.arb` and `app_sa.arb` all present; translation parity test passes (ARB keys, `app_config.json`, and help assets; §8.7).
 - [ ] No untranslated English value left in the Malayalam or Sanskrit file.
 - [ ] Sanskrit Hindi-marker gate passes and glossary terms are used (engineering standard §8.5).
 - [ ] Short-label length budget respected in all three languages (§8.6).
@@ -287,6 +287,8 @@ Complete these items before every release.
       overflow, no clipped Malayalam/Devanagari ascenders (§8.3.3).
 - [ ] In-app language picker works: System default / English / മലയാളം / संस्कृतम्, persists across
       restart, applies without restart (§8.4).
+- [ ] Language splitting disabled in Gradle (`bundle.language.enableSplit = false`) so Play Store
+      users receive all three language resources for in-app switching.
 - [ ] Date pickers and dialogs verified under `sa` (the framework-delegate fallback, §8.3.1).
 - [ ] Every icon-only control has a localized tooltip (§7.8).
 - [ ] About screen shows the "Made with ❤️ from India" badge, localized and centered
@@ -295,6 +297,7 @@ Complete these items before every release.
 ### Google Play Store Readiness (Android)
 
 - [ ] Full §9A gate completed for this release.
+- [ ] Language splitting disabled in App Bundle (`bundle.language.enableSplit = false`, §9A.3).
 - [ ] `targetSdkVersion` meets Play's current target API level policy (re-checked, not assumed).
 - [ ] `versionCode` strictly greater than every previously uploaded build.
 - [ ] App Bundle built; Play App Signing enabled; native debug symbols uploaded.
@@ -486,6 +489,9 @@ and only re-verified afterwards.
 ### 9A.3 Signing and upload
 
 - Ship an **Android App Bundle (`.aab`)**, not an APK, to Play.
+- **Language splitting MUST be disabled** (`bundle { language { enableSplit = false } }` in
+  `android/app/build.gradle.kts`). Without this, Play downloads only the phone's system language,
+  breaking the in-app language picker when switching to Malayalam or Sanskrit.
 - **Play App Signing** MUST be enabled *(one-time)*. Keep the upload key backed up offline; losing
   the upload key is recoverable through Play support, losing a pre-App-Signing release key is not.
 - Signing config points at `android/key.properties` (see `docs/guideline.md` §2) and is **never**
