@@ -35,22 +35,38 @@ Every app MUST use exactly these paths and these class names (`AppConfig`, `Conf
 ```json
 {
   "appName": "My App Name",
-  "description": "One-line description of what the app does.",
+  "description": {
+    "en": "One-line description of what the app does.",
+    "ml": "ആപ്പ് എന്തു ചെയ്യുന്നു എന്നതിന്റെ ഒറ്റവരി വിവരണം.",
+    "sa": "एतत् अनुप्रयोगः किं करोति इति एकपङ्क्तिवर्णनम्।"
+  },
   "version": "1.0.0",
   "build": "1",
   "details": {
-    "Author": "Your Name",
-    "Email": "<Email>",
-    "License": "All libraries used are open source.",
-    "AI used": "<AI Name>",
-    "IDE used": "<IDE Name>"
+    "author": "Your Name",
+    "email": "<Email>",
+    "license": {
+      "en": "All libraries used are open source.",
+      "ml": "ഉപയോഗിച്ച എല്ലാ ലൈബ്രറികളും ഓപ്പൺ സോഴ്സ് ആണ്.",
+      "sa": "सर्वाणि प्रयुक्तानि पुस्तकालयानि मुक्तस्रोतानि सन्ति।"
+    },
+    "aiUsed": "<AI Name>",
+    "ideUsed": "<IDE Name>"
   }
 }
 ```
 
-- `appName`, `description`, `version`, `build` are required top-level string fields.
-- `details` is a free `string → string` map. Add or remove rows as needed; the About
-  screen renders each key/value as a labelled row.
+- `appName`, `description`, `version`, `build` are required top-level fields.
+- `details` is a free map. Add or remove rows as needed; the About screen renders each
+  entry as a labelled row.
+- **Any text value MAY be either a plain string or a locale map**
+  `{"en": …, "ml": …, "sa": …}`. A plain string means "the same text in every language" —
+  correct for values that do not translate (a name, an email address, a tool name), wrong
+  for a sentence. Sentences and anything a user reads as prose MUST use the locale map with
+  all three languages filled in (§3, engineering standard §8.3).
+- **Detail keys are identifiers, not labels.** Use `lowerCamelCase` keys (`author`,
+  `aiUsed`); the visible label comes from ARB key `aboutDetail<Key>` (`aboutDetailAuthor`,
+  `aboutDetailAiUsed`) so the label itself is translated. See §1.6.
 - Keep `version` and `build` in sync with `pubspec.yaml`. `ConfigService` will log a
   non-fatal debug note if they drift (see §1.5).
 
@@ -69,7 +85,9 @@ Without this line the file is not bundled and the app falls back to defaults.
 Rules the model MUST follow:
 
 - Immutable class with `appName`, `description`, `version`, `build`, and
-  `Map<String, String> details`.
+  `Map<String, LocalizedText> details`.
+- A `LocalizedText` value type that holds either one string for all languages or one string
+  per locale, and resolves against the active locale with English as the last fallback.
 - A `static const AppConfig fallback` with safe built-in values, so a missing or
   malformed config never crashes the app.
 - A `factory AppConfig.fromJson(Map<String, dynamic> json)` that reads field by field and
@@ -78,14 +96,52 @@ Rules the model MUST follow:
 Reference implementation:
 
 ```dart
+/// A config text that may be language-independent (one string) or translated
+/// (one string per locale code). Resolution order: exact locale → 'en' → any.
+class LocalizedText {
+  final Map<String, String> _byLocale;
+  final String _plain;
+
+  const LocalizedText.plain(String value)
+      : _plain = value,
+        _byLocale = const {};
+
+  const LocalizedText.byLocale(Map<String, String> byLocale)
+      : _plain = '',
+        _byLocale = byLocale;
+
+  bool get isEmpty => _plain.trim().isEmpty && _byLocale.isEmpty;
+
+  /// [languageCode] is the active app language: 'en', 'ml' or 'sa'.
+  String resolve(String languageCode) {
+    if (_byLocale.isEmpty) return _plain;
+    return _byLocale[languageCode] ??
+        _byLocale['en'] ??
+        (_byLocale.values.isEmpty ? '' : _byLocale.values.first);
+  }
+
+  /// Accepts a JSON string or a {"en": ..., "ml": ..., "sa": ...} map.
+  factory LocalizedText.fromJson(Object? raw, {String fallback = ''}) {
+    if (raw is String) return LocalizedText.plain(raw);
+    if (raw is Map) {
+      final out = <String, String>{};
+      raw.forEach((k, v) {
+        if (k is String && v is String) out[k] = v;
+      });
+      if (out.isNotEmpty) return LocalizedText.byLocale(out);
+    }
+    return LocalizedText.plain(fallback);
+  }
+}
+
 /// Typed values for the About screen, loaded from `assets/config/app_config.json`.
 /// Changing About content is a config edit, not a code change.
 class AppConfig {
   final String appName;
-  final String description;
+  final LocalizedText description;
   final String version;
   final String build;
-  final Map<String, String> details;
+  final Map<String, LocalizedText> details;
 
   const AppConfig({
     required this.appName,
@@ -99,10 +155,10 @@ class AppConfig {
   /// so the app never crashes on a bad config.
   static const AppConfig fallback = AppConfig(
     appName: 'My App',
-    description: 'A Flutter application.',
+    description: LocalizedText.plain('A Flutter application.'),
     version: '0.0.0',
     build: '0',
-    details: {'License': 'All libraries used are open source.'},
+    details: {},
   );
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
@@ -111,22 +167,28 @@ class AppConfig {
       return value is String ? value : fallbackValue;
     }
 
-    Map<String, String> parseStringMap(String key) {
+    Map<String, LocalizedText> parseDetails(String key) {
       final raw = json[key];
       if (raw is! Map) return const {};
-      final out = <String, String>{};
+      final out = <String, LocalizedText>{};
       raw.forEach((k, v) {
-        if (k is String && v is String) out[k] = v;
+        if (k is String) {
+          final text = LocalizedText.fromJson(v);
+          if (!text.isEmpty) out[k] = text;
+        }
       });
       return out;
     }
 
     return AppConfig(
       appName: str('appName', fallback.appName),
-      description: str('description', fallback.description),
+      description: LocalizedText.fromJson(
+        json['description'],
+        fallback: fallback.description.resolve('en'),
+      ),
       version: str('version', fallback.version),
       build: str('build', fallback.build),
-      details: parseStringMap('details'),
+      details: parseDetails('details'),
     );
   }
 }
@@ -203,26 +265,161 @@ in the JSON is the **only** change needed. The screen MUST NOT hard-code field n
 Rules:
 
 - Loop over `config.details.entries`; render one row (`ListTile` or equivalent) per entry.
-- Skip any entry whose key or value is empty after trimming.
+- Skip any entry whose key or resolved value is empty after trimming.
+- **The row label MUST be localized.** Look the label up in ARB by the key
+  `aboutDetail<Key>` (e.g. `author` → `aboutDetailAuthor`). The raw JSON key is a
+  last-resort fallback only, so a newly added key still renders.
+- **The row value MUST be resolved against the active language** via
+  `LocalizedText.resolve(languageCode)`.
 - Optional nicety: if a key equals `email` (case-insensitive), make its row tappable to
   open `mailto:<value>`.
 
 Reference snippet (from the reference About screen):
 
 ```dart
+final lang = Localizations.localeOf(context).languageCode;
+final l10n = AppLocalizations.of(context);
+
+// ...
 for (final entry in config.details.entries)
-  if (entry.key.trim().isNotEmpty && entry.value.trim().isNotEmpty)
+  if (entry.key.trim().isNotEmpty && entry.value.resolve(lang).trim().isNotEmpty)
     ListTile(
-      title: Text(entry.key),
-      subtitle: Text(entry.value),
+      title: Text(aboutDetailLabel(l10n, entry.key)),
+      subtitle: Text(entry.value.resolve(lang)),
       onTap: entry.key.trim().toLowerCase() == 'email'
-          ? () => _openMail(entry.value)
+          ? () => _openMail(entry.value.resolve(lang))
           : null,
     ),
 ```
 
+```dart
+/// Maps a config detail key to its translated label, falling back to the raw key.
+String aboutDetailLabel(AppLocalizations l10n, String key) {
+  switch (key) {
+    case 'author':
+      return l10n.aboutDetailAuthor;
+    case 'email':
+      return l10n.aboutDetailEmail;
+    case 'license':
+      return l10n.aboutDetailLicense;
+    case 'aiUsed':
+      return l10n.aboutDetailAiUsed;
+    case 'ideUsed':
+      return l10n.aboutDetailIdeUsed;
+    default:
+      return key;
+  }
+}
+```
+
 The fixed top rows (`appName` + `description`, and `version`/`build`) MAY be rendered
-explicitly; everything else comes from the `details` loop.
+explicitly; everything else comes from the `details` loop. Their labels ("Version",
+"Build") come from ARB like every other label — never a literal.
+
+---
+
+### 1.7 About screen — the "Made with ❤️ from India" badge (fixed, every app)
+
+Every app's About screen MUST end with the same signature badge, rendered **below all other
+About content**, horizontally centered, in the language the user has selected:
+
+```text
+English    Made with ❤️ from India
+Malayalam  സ്നേഹത്തോടെ ❤️ ഇന്ത്യയിൽ നിന്ന്
+Sanskrit   सस्नेहं निर्मितम् ❤️ भारततः
+```
+
+Rules:
+
+- **Mandatory and identical in every app.** It is not configurable, does not come from
+  `app_config.json`, and MUST NOT be removed, reworded, or replaced per app.
+- **It is the last element** on the About screen, after the `details` rows, with vertical
+  breathing room above it (≥ 24 dp) and safe-area padding below.
+- **The heart is red** (`Color(0xFFE53935)` or the theme's error/red accent); the
+  surrounding words use the theme's muted foreground
+  (`Theme.of(context).colorScheme.onSurfaceVariant`) at `bodySmall`/`labelMedium` size.
+- **The words are localized, the heart is not.** The text comes from ARB key
+  `madeWithLove`, which contains the `❤` placeholder marker `{heart}` so the same widget
+  paints the heart red in all three languages.
+- **It is screen-reader friendly**: wrap it in `Semantics(label: l10n.madeWithLoveA11y)`
+  so a screen reader announces words, not an emoji name.
+- The badge is **not** a link and has no tap action.
+
+ARB entries (all three files are required — see engineering standard §8.3):
+
+```json
+// lib/l10n/app_en.arb
+"madeWithLove": "Made with {heart} from India",
+"@madeWithLove": {
+  "description": "About-screen signature badge. {heart} is a red heart glyph.",
+  "placeholders": { "heart": { "type": "String" } }
+},
+"madeWithLoveA11y": "Made with love from India",
+"@madeWithLoveA11y": { "description": "Screen-reader text for the About badge" }
+```
+
+```json
+// lib/l10n/app_ml.arb
+"madeWithLove": "സ്നേഹത്തോടെ {heart} ഇന്ത്യയിൽ നിന്ന്",
+"madeWithLoveA11y": "സ്നേഹത്തോടെ ഇന്ത്യയിൽ നിന്ന്"
+```
+
+```json
+// lib/l10n/app_sa.arb
+"madeWithLove": "सस्नेहं निर्मितम् {heart} भारततः",
+"madeWithLoveA11y": "सस्नेहं निर्मितम् भारततः"
+```
+
+These three strings are **fixed wording** — copy them verbatim into every app. The `{heart}`
+placeholder sits mid-string in all three, which the reference widget below handles; do not move it
+to the start or end to make an implementation simpler.
+
+Reference widget — `lib/widgets/made_with_love.dart`:
+
+```dart
+/// The fixed "Made with ❤️ from India" badge shown at the bottom of every
+/// About screen. Text is localized; the heart is always red.
+class MadeWithLove extends StatelessWidget {
+  const MadeWithLove({super.key});
+
+  static const String _heart = '❤';
+  static const Color _heartColor = Color(0xFFE53935);
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final base = theme.textTheme.bodySmall!
+        .copyWith(color: theme.colorScheme.onSurfaceVariant);
+
+    // Split the localized template around the {heart} placeholder so the
+    // heart keeps its own colour in every language. A sentinel that can never
+    // appear in translated text makes the split exact.
+    const sentinel = '\u0000';
+    final parts = l10n.madeWithLove(sentinel).split(sentinel);
+
+    return Semantics(
+      label: l10n.madeWithLoveA11y,
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: parts.first, style: base),
+                TextSpan(text: _heart, style: base.copyWith(color: _heartColor)),
+                TextSpan(text: parts.length > 1 ? parts[1] : '', style: base),
+              ],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
 
 > **Note on other constants.** This JSON pattern is only for **About-screen** metadata.
 > Technical constants (database names, preference keys, thresholds, channel IDs) do NOT
@@ -398,7 +595,7 @@ lib/
   screens/           # full-page screens (incl. the About screen)
   widgets/           # reusable UI widgets
   theme/             # colors, text styles, ThemeData
-  l10n/              # ARB string files. REQUIRED for every app, even single-language.
+  l10n/              # ARB files — app_en.arb, app_ml.arb, app_sa.arb. All three REQUIRED.
 ```
 
 Rules:
@@ -412,13 +609,28 @@ Rules:
   These files are committed and may become public — write them as if a stranger will read them.
   Full rule and bad → good examples:
   [flutter_project_engineering_standard.md §21.1.1](flutter_project_engineering_standard.md).
-- `l10n.yaml` MUST exist at the project root and `lib/l10n/app_<base>.arb` MUST exist — for **every**
-  app, even one that ships a single language. All user-visible text MUST come from
-  `AppLocalizations`, never a raw string literal in a widget. ARB is the Flutter equivalent of
-  Android's `strings.xml`: create it from day one so adding a language later is only a new file.
+- `l10n.yaml` MUST exist at the project root, and **all three** ARB files MUST exist:
+  `lib/l10n/app_en.arb` (template), `lib/l10n/app_ml.arb` (Malayalam), `lib/l10n/app_sa.arb`
+  (Sanskrit). Every app ships **English, Malayalam and Sanskrit** — no app is single-language.
+  All user-visible text MUST come from `AppLocalizations`, never a raw string literal in a widget.
+  Full rules: [flutter_project_engineering_standard.md §8](flutter_project_engineering_standard.md).
+- **Key parity is mandatory**: every ARB key exists in all three files with a real translation.
+  A feature is not done until its strings exist in English, Malayalam and Sanskrit (§8.7).
+- **Sanskrit means Sanskrit**, not Hindi written in Devanagari. `app_sa.arb` MUST follow the
+  Sanskrit quality rules and glossary in §8.5 of the engineering standard.
+- **The app language is user-selectable.** The default is the system locale (falling back to
+  English when it is not one of the three); a language picker in Settings MUST let the user
+  override it, and the choice MUST persist across restarts and apply immediately (§8.4).
+- **Menu, label, button and tab text MUST be short** in all three languages (§8.6). Only
+  descriptive text (help, empty-state explanations, About description, error detail) may be long.
+- **Every icon-only control MUST have a localized tooltip** — `IconButton`, `FloatingActionButton`,
+  `PopupMenuButton`, icon-only gestures, and icon-only navigation destinations (§7.8).
 - `core/config/` MUST exist and hold `AppConfig` + `ConfigService` exactly as in §1.
 - The About screen lives under `screens/` (e.g. `screens/about_screen.dart`) and reads its
-  values from `ConfigService` / `AppConfig` — it MUST NOT hard-code About text.
+  values from `ConfigService` / `AppConfig` — it MUST NOT hard-code About text — and MUST end
+  with the fixed "Made with ❤️ from India" badge (§1.7).
+- Apps that ship to users MUST also satisfy the Google Play readiness gate in
+  [release_process.md §9A](release_process.md) before the first upload.
 - Pick **one** state-management folder name per app (`providers/` **or** `state/`) and use
   it consistently.
 - Larger apps MAY introduce a layered or feature-first structure (e.g. `domain/`, `data/`,
@@ -433,19 +645,34 @@ Rules:
 - [ ] Root `AGENTS.md` exists at project root and follows [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md) (**MUST**).
 - [ ] `plans/` and `change_log/` files use relative repository paths only and contain zero local
       system details and zero sensitive data — safe to publish on the internet (**MUST**).
-- [ ] `l10n.yaml` exists at the project root and `lib/l10n/app_<base>.arb` exists (**MUST**, even
-      for a single-language app).
+- [ ] `l10n.yaml` exists at the project root and all three ARB files exist: `app_en.arb`,
+      `app_ml.arb`, `app_sa.arb` (**MUST**).
+- [ ] ARB key parity holds — every key is present and translated in all three files (**MUST**).
+- [ ] `supportedLocales` is `en`, `ml`, `sa`, and the Sanskrit Material/Cupertino fallback
+      delegate is installed (**MUST**, engineering standard §8.3).
+- [ ] Settings has a language picker (System default / English / മലയാളം / संस्कृतम्) that persists
+      and applies without a restart (**MUST**, §8.4).
+- [ ] `app_sa.arb` passes the Sanskrit quality check — no Hindi markers (**MUST**, §8.5).
+- [ ] Menu / label / button / tab text is within the length budget in all three languages
+      (**MUST**, §8.6).
+- [ ] Every icon-only control has a localized tooltip (**MUST**, §7.8).
 - [ ] No hard-coded user-visible strings — all screen text comes from `AppLocalizations` (**MUST**).
 - [ ] `assets/config/app_config.json` exists with `appName`, `description`, `version`,
-      `build`, `details`.
+      `build`, `details`; every prose value uses the `{"en","ml","sa"}` locale map (§1.2).
 - [ ] `assets/config/` registered under `flutter: assets:` in `pubspec.yaml`.
 - [ ] `lib/core/config/app_config.dart` defines `AppConfig` with `fromJson` + `fallback`.
 - [ ] `lib/core/config/config_service.dart` defines `ConfigService` with `load()` +
       `loadAndVerify()`.
 - [ ] About screen reads from `ConfigService`, not hard-coded strings.
-- [ ] About screen renders `details` dynamically (loops the map, no hard-coded field names).
+- [ ] About screen renders `details` dynamically (loops the map, no hard-coded field names), with
+      localized labels (`aboutDetail<Key>`) and locale-resolved values (§1.6).
+- [ ] About screen ends with the fixed "Made with ❤️ from India" badge, red heart, centered,
+      localized words (**MUST**, §1.7).
 - [ ] Release keystore is at `android/<name>.jks`; `android/key.properties` points to it.
 - [ ] `android/key.properties`, `android/*.jks`, `android/*.keystore` are git-ignored.
 - [ ] Production builds run with `--release`, `--obfuscate`, and `--split-debug-info` (§2.4).
 - [ ] Debug symbols archived securely alongside release artifacts.
 - [ ] `lib/` follows the baseline layout in §3 (subset is fine for small apps).
+- [ ] Google Play readiness gate passed before the first upload — package id, target API level,
+      App Bundle + Play App Signing, Data safety form, privacy policy, listing assets
+      ([release_process.md §9A](release_process.md)) (**MUST** for any app shipped to users).

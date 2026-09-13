@@ -749,7 +749,8 @@ user-facing features.
 - Use `excludeSemantics: true` on decorative images and icons that carry no meaning.
 - Custom interactive widgets (gestures, custom painters, canvas) MUST provide `onTap`, `label`,
   and `hint` semantics.
-- `Tooltip` widgets automatically contribute to semantics on long-press; use them for icon buttons.
+- `Tooltip` widgets automatically contribute to semantics on long-press. Every icon-only control
+  MUST have one — see 7.8, which is a hard requirement, not a suggestion.
 - Use `MergeSemantics` when multiple widgets form a single logical unit (e.g. a list tile with an
   icon and a label).
 - Do not suppress semantics on content that communicates state (loading spinners, error badges).
@@ -832,14 +833,103 @@ For widget tests, wrap the widget under test with
 (or `2.0`) and assert no overflow or clipping. No text should be clipped or overflow its
 container at any of these values.
 
+### 7.8 Tooltips On Icon-Only Controls (Mandatory)
+
+**Every button whose only visible content is an icon MUST have a tooltip.** An icon without a
+label is a guess for a sighted user and silence for a screen reader; the tooltip fixes both at
+once, because Flutter feeds tooltip text into the semantics tree.
+
+This applies to:
+
+| Widget | How the tooltip is supplied |
+|---|---|
+| `IconButton` | `tooltip:` parameter |
+| `FloatingActionButton` / `.small` / `.large` | `tooltip:` parameter |
+| `PopupMenuButton` | `tooltip:` parameter (and each item carries its own visible label) |
+| `DropdownButton` with an icon-only child | wrap in `Tooltip` |
+| Icon-only `InkWell`, `GestureDetector`, `IconSlider`, custom painters | wrap in `Tooltip(message: ...)` **and** provide `Semantics(label:, hint:)` |
+| `BottomNavigationBarItem`, `NavigationDestination`, `NavigationRailDestination` shown **without** a persistent visible label | `tooltip:` on the destination |
+| `AppBar` actions, `SliverAppBar` actions, toolbar overflow buttons | `tooltip:` on each action |
+| `Chip` / `ListTile` trailing icon buttons | `tooltip:` on the button |
+
+Rules:
+
+- The tooltip text MUST come from ARB via `AppLocalizations` — never a raw literal — and is
+  therefore rendered in the user's chosen language like every other string (section 8).
+- The tooltip names **the action, not the icon**: "Delete note", not "Trash icon".
+- Tooltip text follows the short-label budget in 8.6 (it is UI chrome, not prose).
+- A control that already shows a persistent text label next to its icon does not need a tooltip;
+  adding one is allowed but MUST NOT repeat the label verbatim.
+- Never use a tooltip as the only way to convey information required to operate the app — it is
+  a hint, not content.
+- Destructive actions SHOULD still confirm; a tooltip is not a confirmation.
+
+```dart
+IconButton(
+  icon: const Icon(Icons.delete_outline),
+  tooltip: AppLocalizations.of(context).actionDelete, // short, localized
+  onPressed: _delete,
+)
+
+// Custom icon-only control: tooltip + explicit semantics.
+Tooltip(
+  message: l10n.actionShare,
+  child: Semantics(
+    button: true,
+    label: l10n.actionShare,
+    child: InkWell(onTap: _share, child: const Icon(Icons.share)),
+  ),
+)
+```
+
+**Verification.** Add this widget test to any screen with icon buttons; it fails the build when a
+tooltip is missing:
+
+```dart
+void expectAllIconButtonsHaveTooltips(WidgetTester tester) {
+  final buttons = tester.widgetList<IconButton>(find.byType(IconButton));
+  for (final button in buttons) {
+    expect(
+      button.tooltip != null && button.tooltip!.trim().isNotEmpty,
+      isTrue,
+      reason: 'IconButton with icon ${button.icon} has no tooltip',
+    );
+  }
+  final fabs = tester.widgetList<FloatingActionButton>(
+    find.byType(FloatingActionButton),
+  );
+  for (final fab in fabs) {
+    expect(fab.tooltip?.trim().isNotEmpty ?? false, isTrue,
+        reason: 'FloatingActionButton has no tooltip');
+  }
+}
+```
+
+Run it for every screen under test, in all three locales, as part of the screen's widget test.
+
 ---
 
 ## 8. Localization And Internationalization
 
-This section is `Core Baseline`: it applies to every user-facing app repository, including apps
-that ship only one language. Single-language apps MUST complete the minimum setup in 8.1 (to avoid
-widget rendering failures on non-English system locales) **and** the string externalization in 8.2
-(so a second language is only a new file, never a rewrite).
+This section is `Core Baseline` and applies to every user-facing app repository.
+
+**Every app ships three languages: English (`en`), Malayalam (`ml`) and Sanskrit (`sa`).** There is
+no single-language app. The app starts in the system language when that is one of the three and in
+English otherwise, and the user can change the language inside the app at any time. Every feature,
+every screen, and every string — labels, menus, buttons, tooltips, dialogs, notifications, errors,
+empty states, About content — renders in the language the user selected.
+
+| Sub-section | Rule |
+|---|---|
+| 8.1 | Minimum `MaterialApp` / `l10n.yaml` setup |
+| 8.2 | String externalization into ARB — no user-visible literals |
+| 8.3 | The three mandatory languages, the Sanskrit delegate gap, fonts |
+| 8.4 | In-app language selection, persistence, resolution order |
+| 8.5 | Sanskrit & Malayalam quality — rules, orthography, standard glossary |
+| 8.6 | Short UI labels vs. descriptive text |
+| 8.7 | Per-feature language completeness and the parity test |
+| 8.8 | RTL layout support |
+| 8.9 | Locale-sensitive formatting |
 
 ### 8.1 Minimum Setup (All Apps)
 
@@ -857,11 +947,15 @@ MaterialApp(
     GlobalCupertinoLocalizations.delegate,
   ],
   supportedLocales: const [
-    Locale('en'),
-    // Add additional locales as the app supports them.
+    Locale('en'), // English — template locale
+    Locale('ml'), // Malayalam
+    Locale('sa'), // Sanskrit (Devanagari)
   ],
 );
 ```
+
+The three locales above are **fixed**: every app declares exactly these, in this order. See 8.3 for
+the extra delegate Sanskrit requires and 8.4 for the in-app switcher.
 
 Add to `pubspec.yaml`:
 
@@ -899,21 +993,25 @@ Pick one and document the choice.
 
 ### 8.2 String Externalization (Mandatory, All Apps)
 
-Every app MUST externalize its user-visible strings into ARB files, **even if it supports only one
-language**. This is not optional and does not wait for a translation request.
+Every app MUST externalize its user-visible strings into ARB files. This is not optional and does
+not wait for a translation request.
 
 ARB files are the Flutter equivalent of Android's `res/values/strings.xml`. On Android we create
-`strings.xml` from day one even for a one-language app, so adding a language later is just a new
-`values-xx/strings.xml`. We follow the same habit in Flutter: create `app_en.arb` from day one, so
-adding a language later is just a new `app_xx.arb` — not a rewrite of every screen.
+`strings.xml` from day one, so a new language is just a new `values-xx/strings.xml`. We follow the
+same habit in Flutter — with the difference that all three of our languages exist from day one.
 
 Required for every app:
 
 - `l10n.yaml` MUST exist at the project root (see 8.1).
-- `lib/l10n/app_en.arb` MUST exist (or the app's own base locale, e.g. `app_ml.arb`).
-- Every user-visible string MUST be defined in the ARB file and read through
+- All three ARB files MUST exist: `lib/l10n/app_en.arb` (template), `lib/l10n/app_ml.arb`,
+  `lib/l10n/app_sa.arb`.
+- Every user-visible string MUST be defined in the ARB files and read through
   `AppLocalizations.of(context)`. A raw string literal in a widget is not allowed.
-- Every ARB entry MUST have an `@key` description, so a future translator has context.
+- Every key MUST exist in **all three** files with a real translation. An English value copied into
+  `app_ml.arb` or `app_sa.arb` as a placeholder is an unfinished feature, not a translation (8.7).
+- Every ARB entry MUST have an `@key` description in the template file, so a translator has context.
+  Where a key is UI chrome rather than prose, say so in the description (it drives the length budget
+  in 8.6), e.g. `"description": "Toolbar button label. Keep to one or two words."`.
 
 **Narrow exceptions** — these MAY stay as plain Dart literals, because a user never reads them:
 
@@ -932,8 +1030,9 @@ Directory structure:
 ```text
 lib/
 `-- l10n/
-    |-- app_en.arb   # REQUIRED — the base locale, even for a single-language app
-    `-- app_es.arb   # OPTIONAL — one more file per additional locale
+    |-- app_en.arb   # REQUIRED — English, the template locale
+    |-- app_ml.arb   # REQUIRED — Malayalam
+    `-- app_sa.arb   # REQUIRED — Sanskrit (Devanagari)
 ```
 
 Example ARB file:
@@ -960,31 +1059,637 @@ flutter gen-l10n
 ```
 
 Use in code via `AppLocalizations.of(context)!.appTitle` (or `AppLocalizations.of(context).appTitle`
-when `nullable-getter: false` is set). Never use raw string literals for user-visible text — in any
-app, single-language or not.
+when `nullable-getter: false` is set). Never use raw string literals for user-visible text.
 
-**Adding a second language later.** Because the strings are already externalized, this is a small,
+**Adding a fourth language later.** Because the strings are already externalized, this is a small,
 mechanical job:
 
 1. Add `lib/l10n/app_<code>.arb` with the same keys and translated values.
-2. Add `Locale('<code>')` to `supportedLocales`.
+2. Add `Locale('<code>')` to `supportedLocales` and to the in-app language picker (8.4).
 3. Run `flutter gen-l10n`.
 
 No screen or widget code changes.
 
-### 8.3 RTL Layout Support
+### 8.3 The Three Mandatory Languages
+
+| Locale | Language | Script | Role |
+|---|---|---|---|
+| `en` | English | Latin | Template ARB, ultimate fallback |
+| `ml` | Malayalam | Malayalam | Full UI translation |
+| `sa` | Sanskrit | Devanagari | Full UI translation (see 8.5) |
+
+All three MUST be listed in `supportedLocales`, all three ARB files MUST be complete, and the
+in-app picker (8.4) MUST offer all three plus "System default".
+
+#### 8.3.1 Sanskrit has no Flutter framework translation — install a fallback delegate
+
+`flutter_localizations` ships `GlobalMaterialLocalizations` and `GlobalCupertinoLocalizations` for a
+long list of locales, **but not for `sa`**. Adding `Locale('sa')` to `supportedLocales` without
+handling this throws at runtime the first time a Material widget needs framework strings (date
+picker, dialog buttons, text-selection menu, `Scaffold` semantics labels).
+
+Every app MUST therefore install a delegate that serves framework strings for `sa` from a supported
+locale, while the app's own strings (via `AppLocalizations`) stay Sanskrit. Use English as the
+framework fallback — not Hindi — so no Hindi text can ever leak into a Sanskrit UI.
+
+```dart
+// lib/l10n/sa_material_localizations.dart
+//
+// flutter_localizations has no Sanskrit ('sa') translation. This delegate
+// answers for Locale('sa') by loading the English framework strings, so the
+// app's own Sanskrit strings render while Material widgets still work.
+class SaMaterialLocalizationsDelegate
+    extends LocalizationsDelegate<MaterialLocalizations> {
+  const SaMaterialLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'sa';
+
+  @override
+  Future<MaterialLocalizations> load(Locale locale) =>
+      GlobalMaterialLocalizations.delegate.load(const Locale('en'));
+
+  @override
+  bool shouldReload(covariant LocalizationsDelegate old) => false;
+}
+
+class SaCupertinoLocalizationsDelegate
+    extends LocalizationsDelegate<CupertinoLocalizations> {
+  const SaCupertinoLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'sa';
+
+  @override
+  Future<CupertinoLocalizations> load(Locale locale) =>
+      GlobalCupertinoLocalizations.delegate.load(const Locale('en'));
+
+  @override
+  bool shouldReload(covariant LocalizationsDelegate old) => false;
+}
+
+class SaWidgetsLocalizationsDelegate
+    extends LocalizationsDelegate<WidgetsLocalizations> {
+  const SaWidgetsLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'sa';
+
+  @override
+  Future<WidgetsLocalizations> load(Locale locale) =>
+      GlobalWidgetsLocalizations.delegate.load(const Locale('en'));
+
+  @override
+  bool shouldReload(covariant LocalizationsDelegate old) => false;
+}
+```
+
+Register the Sanskrit delegates **before** the global ones, so they win for `sa`:
+
+```dart
+MaterialApp(
+  localizationsDelegates: const [
+    AppLocalizations.delegate,
+    SaMaterialLocalizationsDelegate(),
+    SaCupertinoLocalizationsDelegate(),
+    SaWidgetsLocalizationsDelegate(),
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ],
+  supportedLocales: const [Locale('en'), Locale('ml'), Locale('sa')],
+);
+```
+
+A widget test MUST cover this: pump the app with `locale: Locale('sa')`, open a date picker and a
+dialog, and assert no exception. This is the single most likely Sanskrit runtime failure.
+
+#### 8.3.2 `intl` formatting under Sanskrit
+
+`intl` has no `sa` date or number symbols, so `DateFormat.yMMMMd('sa')` throws. Format with a
+supported locale while the surrounding UI text stays Sanskrit:
+
+```dart
+/// Locale to hand to `intl`. Sanskrit has no CLDR data, so dates and numbers
+/// are formatted with English patterns while the UI text stays Sanskrit.
+String formattingLocale(Locale locale) =>
+    DateFormat.localeExists(locale.toLanguageTag())
+        ? locale.toLanguageTag()
+        : 'en';
+```
+
+Use `formattingLocale(...)` everywhere 8.9 calls for a locale argument. Do not fall back to `hi`.
+
+#### 8.3.3 Fonts and script coverage
+
+Malayalam and Devanagari glyphs are not guaranteed on every Android device or on Windows, and a
+missing glyph renders as a blank box — a silent, ship-blocking bug for two of our three languages.
+
+- The app MUST either bundle fonts covering both scripts (e.g. Noto Sans Malayalam and Noto Sans
+  Devanagari) or declare an explicit `fontFamilyFallback` chain and verify rendering on a clean
+  device image for each supported platform.
+- Bundled fonts MUST be subset where possible and recorded under the font-licensing rules (17.4).
+- Verification is per release: open every screen in `ml` and in `sa` on a clean device and confirm
+  no boxes, no clipped ascenders/descenders (Malayalam and Devanagari are taller than Latin), and
+  no overflow. Do not hard-code text container heights (7.4).
+
+### 8.4 In-App Language Selection (Mandatory)
+
+The language is the user's choice, not the device's alone.
+
+**Resolution order** — the app resolves its locale as:
+
+1. the language the user saved inside the app, if any;
+2. otherwise the system locale, when its language code is `en`, `ml` or `sa`;
+3. otherwise English.
+
+Rules:
+
+- The choice MUST persist across restarts (`SharedPreferences` key `app_language`, values
+  `system` | `en` | `ml` | `sa`) and MUST be read **before** the first frame, so the app never
+  flashes the wrong language at startup (see 4.5).
+- Changing the language MUST apply **immediately and app-wide**, without restarting the app and
+  without popping the user back to the home screen.
+- The picker MUST live in Settings, MUST offer **System default** as an explicit first option, and
+  MUST list each language in its own script (its endonym), not translated:
+
+  | Option | Shown as |
+  |---|---|
+  | System default | localized label, e.g. "System default" / "സിസ്റ്റം സ്വതവേ" / "तन्त्रसिद्धम्" |
+  | English | `English` |
+  | Malayalam | `മലയാളം` |
+  | Sanskrit | `संस्कृतम्` |
+
+- The current selection MUST be visibly marked (radio / check), and the setting row MUST be
+  reachable by screen reader with a label describing the current value.
+- Locale state MUST live in one place (`LocaleController` / a provider), and `MaterialApp.locale`
+  MUST be driven by it. Screens MUST NOT read the language from anywhere else.
+
+Reference controller:
+
+```dart
+/// Single source of truth for the app language. `null` locale means
+/// "follow the system", resolved by MaterialApp against supportedLocales.
+class LocaleController extends ChangeNotifier {
+  static const String prefKey = 'app_language';
+  static const String systemValue = 'system';
+  static const List<String> supported = ['en', 'ml', 'sa'];
+
+  final SharedPreferences _prefs;
+  Locale? _locale;
+
+  LocaleController(this._prefs) {
+    final saved = _prefs.getString(prefKey) ?? systemValue;
+    _locale = supported.contains(saved) ? Locale(saved) : null;
+  }
+
+  /// null => follow the system locale.
+  Locale? get locale => _locale;
+
+  bool get isSystem => _locale == null;
+
+  Future<void> setLanguage(String value) async {
+    _locale = value == systemValue ? null : Locale(value);
+    await _prefs.setString(prefKey, value);
+    notifyListeners();
+  }
+}
+```
+
+```dart
+MaterialApp(
+  locale: localeController.locale, // null => system locale
+  supportedLocales: const [Locale('en'), Locale('ml'), Locale('sa')],
+  localeResolutionCallback: (deviceLocale, supported) {
+    for (final l in supported) {
+      if (l.languageCode == deviceLocale?.languageCode) return l;
+    }
+    return const Locale('en'); // system language is none of the three
+  },
+);
+```
+
+### 8.5 Sanskrit & Malayalam Quality — Standard UI Glossary
+
+Every app ships three languages: English, Malayalam, and Sanskrit (8.3). Both Malayalam and Sanskrit
+demand deliberate linguistic care to avoid common pitfalls: Hindi leakage in Sanskrit due to the
+shared Devanagari script, and awkward English transliterations or calques in Malayalam.
+
+#### 8.5.1 Sanskrit Quality Rules (Pure Sanskrit, Never Hindi)
+
+Sanskrit's derivational system — verbal roots (`धातु`), prefixes (`उपसर्ग`), suffixes
+(`कृत्` / `तद्धित प्रत्यय`), and compounds (`समास`) — can derive a term for any UI concept.
+
+Because Sanskrit and Hindi share the Devanagari script, Hindi text *looks* like Sanskrit to anyone
+who does not read it. Never use Hindi anywhere as a substitute, crutch, or fallback for Sanskrit.
+`app_sa.arb` MUST be authentic, uncompromised Sanskrit.
+
+- **Classical vocabulary and grammar**: Use authentic Sanskrit nominal stems, proper case endings,
+  and correct verbal forms (e.g. polite passive imperative `परिवर्त्यताम्`, not Hindi `बदलें`).
+- **No transliterated English loans**: Never transliterate English words into Devanagari when a
+  standard Sanskrit word exists (`सेटिंग्स` is Hindi/English in Devanagari; use `विन्यासः`).
+- **No Hindi function words or syntax**: Do not use Hindi postpositions (`का`, `की`, `के`, `को`,
+  `में`, `से`, `पर`), copulas (`है`, `हैं`, `था`, `थे`, `थी`, `हूं`), or verb endings (`करें`,
+  `करना`, `रहा`, `गया`, `चाहिए`).
+- **No nukta consonants**: The Perso-Arabic consonants with nukta (`क़`, `ख़`, `ग़`, `ज़`, `ड़`, `ढ़`,
+  `फ़`) do not occur in Sanskrit.
+- **Strict grammatical agreement**: Participles and adjectives must agree with their subject in
+  gender and case. In "No data found", `दत्तांशः` is masculine nominative, so the participle must be
+  `प्राप्तः` and the indefinite pronoun `कोऽपि`: `न कोऽपि दत्तांशः प्राप्तः` (never neuter `न किमपि दत्तांशं प्राप्तम्`).
+- **Valid morphological derivation**:
+  - Do not invent verbs by slapping verbal endings onto nouns. "Copy" is `प्रतिलिख्यताम्` (from verb
+    root `लिख्` with `प्रति`) or `प्रतिलिपिः क्रियताम्`, never pseudo-verb `प्रतिलिप्यताम्`.
+  - The past passive participle for "Copied" is `प्रतिलिखितम्` (or `प्रतिलिपीकृतम्`), never `प्रतिलिपितम्`.
+  - Causative passive of `या` (go) is `निर्याप्यते` / `निर्याप्यताम्` (Export), never `निर्यात्यताम्`.
+  - "Confirm" is `स्थिरीक्रियताम्` or `दृढीक्रियताम्` (let it be made firm), never `संपुष्यताम्` (which means "let it be nourished").
+  - Do not use Hindi loanwords for concepts that have native Sanskrit terms (use `उपयोक्तृविवरणम्` for Account, never Hindi `खाता`; `लेखा` strictly means a line/furrow).
+  - Use `ध्वनिः` for audio/sound to avoid confusion with `शब्दः` (Word).
+- **Form conventions**:
+  - A button or menu item (action commanding the app): polite imperative passive (`कर्मणि लोट्`, `-ताम्`), e.g. `रक्ष्यताम्` (Save), `अन्विष्यताम्` (Search).
+  - A title, tab, label, heading, or status: nominal / abstract noun, e.g. `अन्वेषणम्` (Search), `विन्यासः` (Settings).
+  - A confirmation or boolean response: indeclinable, e.g. `आम्` (Yes), `न` (No), `अस्तु` (OK).
+- **Punctuation**: Use the **daṇḍa** `।` to end a sentence in descriptive prose; UI labels take no terminator.
+- **Locale marker**: Always set `"@@locale": "sa"` at the top of `app_sa.arb`.
+- **Pre-release review**: Machine translation tools commonly output Hindi for Sanskrit requests. All
+  Sanskrit ARB entries MUST be reviewed before release.
+
+**Forbidden markers.** None of these tokens may appear anywhere in `app_sa.arb`. They are reliable
+Hindi giveaways and make a good grep-based gate:
+
+```text
+है  हैं  था  थे  थी  हूं  हो  करें  करना  करके  रहा  रही  रहे  गया  गयी  चाहिए
+नहीं  और  लेकिन  क्या  आपका  आपकी  आपके  हमारा  मेरा  कृपया  सेटिंग्स  ऐप
+◌़ (nukta U+093C, and the precomposed nukta letters U+0958–U+095F)
+```
+
+```bash
+# CI gate: fail the build if any Hindi marker appears in the Sanskrit ARB.
+# Uses PCRE (-P) with lookarounds so standalone copulas/words are not confused with
+# legitimate Sanskrit roots (e.g. स्थाप्यताम्, स्थानम्) or indeclinables (यथा, तथा, कथा).
+LC_ALL=C.UTF-8 grep -nP '(?<=[\s"'\''([{।,]|^)(?:था|थे|थी|हो|है|हैं|हूं|और)(?=[\s"'\''\)\]}।,.\?!]|$)|करें|करना|करके|रहा|रही|रहे|गया|गयी|चाहिए|नहीं|लेकिन|क्या|कृपया|सेटिंग्स|ऐप|\x{093C}|[\x{0958}-\x{095F}]' \
+  lib/l10n/app_sa.arb && { echo 'Hindi markers found in app_sa.arb'; exit 1; } || exit 0
+```
+
+> The gate is a smoke test, not a proof of correctness: passing it means no obvious Hindi marker is
+> present, not that the Sanskrit is good. Human review still applies.
+> Standalone copulas/words like था, थे, थी, हो, है, हैं, हूं, और are matched with boundary lookarounds
+> on whitespace, quotes, brackets, and punctuation (including daṇḍa `।`).
+> This ensures legitimate Sanskrit roots like स्था (`स्थाप्यताम्`, `स्थानम्`, `पुनःस्थाप्यताम्`) and
+> indeclinables like `यथा`, `तथा`, `कथा` never trigger false-positive build failures.
+
+
+#### 8.5.2 Malayalam Quality Rules (Natural Malayalam, Not English Transliterations)
+
+Malayalam UI strings must sound natural and idiomatic to native Malayalam speakers.
+
+- **Avoid lazy English transliterations; established loanwords allowed**: Do not phonetically
+  transliterate English UI jargon into Malayalam script when standard, authentic Malayalam words exist.
+  - Save: `സൂക്ഷിക്കുക` (never bare `സേവ്`).
+  - Print: `അച്ചടിക്കുക` (never `പ്രിന്റ്`).
+  - Vibration: `കമ്പനം` (never `വൈബ്രേഷൻ`).
+  - Optional: `ഐച്ഛികം` (never `ഓപ്ഷണൽ`).
+  - Number: `സംഖ്യ` (never `നമ്പർ`).
+  - Page: `താൾ` (never `പേജ്`).
+  - Widely established digital loanwords (such as `ഹോം`, `മെനു`, `പ്രൊഫൈൽ`, `അക്കൗണ്ട്`, `ഡൗൺലോഡ്`,
+    `ഓഫ്‌ലൈൻ`, `തീം`, `ഫയൽ`, `ഫോൾഡർ`, `ലിങ്ക്`, `ലൈസൻസ്`) are accepted where no single native term
+    carries universal recognition.
+- **Action buttons use verb forms**: Action buttons commanding an operation MUST use the verbal
+  form ending in `-ക്കുക` / `-ക` (`തിരുത്തുക`, `സൂക്ഷിക്കുക`, `നീക്കുക`, `തുറക്കുക`, `പുറത്തുകടക്കുക`,
+  `ലോഗൗട്ട് ചെയ്യുക`), never a bare English noun or uninflected loan.
+- **Accurate negation (`ഇല്ല` vs `അല്ല`)**:
+  - `ഇല്ല` denotes non-existence, absence, or refusal to perform an action. For confirmation dialog
+    action buttons (Yes / No), use **`അതെ` / `ഇല്ല`**.
+  - `അല്ല` denotes negation of identity or qualification ("is not", e.g. `ശരിയല്ല`). Do not put
+    `അല്ല` on a confirmation prompt's "No" button when the dialog asks if an action should be done.
+- **Avoid ungrammatical standalone postpositions**: Postpositions like `കുറിച്ച്` govern an accusative
+  noun (e.g. `ആപ്പിനെക്കുറിച്ച്`); standing alone as a screen title or heading, `കുറിച്ച്` is
+  ungrammatical. Use `വിവരണം` or `ആപ്പിനെക്കുറിച്ച്` for "About".
+- **Contextual accuracy over literal calques**:
+  - Preferences: `താൽപ്പര്യങ്ങൾ` or `ഇഷ്ടങ്ങൾ` (matches Sanskrit `रुचयः`). `മുൻഗണനകൾ` strictly means
+    **Priorities** (precedence/rank) and is a misleading false friend.
+  - Apply (theme/filters): `പ്രയോഗിക്കുക` or `നടപ്പിലാക്കുക`. `ബാധകമാക്കുക` means legal liability/enforcement.
+  - Sort: `ക്രമീകരിക്കുക` (arrange in order / sort sequence). `അടുക്കുക` means to stack or draw near.
+- **Modern Unicode orthography**: Always use standard Unicode Malayalam atomic chillu characters (`ൺ`, `ൻ`, `ർ`, `ൽ`, `ൾ`). Avoid legacy ZWJ sequences or non-standard glyphs.
+
+#### 8.5.3 Bad → Good Translations
+
+| English | Bad (Hindi / English loan / Calque) | Good (Sanskrit) | Good (Malayalam) | Linguistic Rationale |
+|---|---|---|---|---|
+| Settings | सेटिंग्स / സെറ്റിംഗ്സ് | विन्यासः | ക്രമീകരണങ്ങൾ | Standard native terminology |
+| Save | सेव करें / സേവ് | रक्ष्यताम् | സൂക്ഷിക്കുക | Polite imperative in SA; `-ക്കുക` verb in ML |
+| Delete | डिलीट करें / ഡിലീറ്റ് | लुप्यताम् / विलुप्यताम् | ഇല്ലാതാക്കുക | Authentic verbal action |
+| Cancel | कैंसिल / ക്യാൻസൽ | निरस्यताम् | റദ്ദാക്കുക | Native rejection/dismissal term |
+| Copy | कॉपी करें / കോപ്പി | प्रतिलिख्यताम् | പകർത്തുക | `प्रति + लिख्` verb in SA; NOT `प्रतिलिप्यताम्` |
+| Export | निर्यात करें / എക്സ്പോർട്ട് | निर्याप्यताम् | കയറ്റുമതി ചെയ്യുക | Correct causative passive of `या` in SA |
+| Search | खोजें / സെർച്ച് | अन्वेषणम् (title) / अन्विष्यताम् (action) | തിരയുക | Distinct noun title vs. action button |
+| No data found | कोई डेटा नहीं मिला / ഡാറ്റ ഇല്ല | न कोऽपि दत्तांशः प्राप्तः | വിവരങ്ങളൊന്നും കണ്ടെത്തിയില്ല | Gender agreement in SA (`दत्तांशः` masculine nom.) |
+| Preferences | प्रेफरेंसेस / മുൻഗണനകൾ | रुचयः | താൽപ്പര്യങ്ങൾ / ഇഷ്ടങ്ങൾ | `മുൻഗണനകൾ` means priorities, not preferences |
+| Confirm | संपुष्यताम् / കൺഫേം | स्थिरीक्रियताम् / दृढीक्रियताम् | സ്ഥിരീകരിക്കുക | `पुष्` means nourish; `स्थिरी` means confirm |
+| Print | प्रिंट करें / പ്രിന്റ് | मुद्र्यताम् | അച്ചടിക്കുക | Standard Malayalam verb |
+| About | ऐप के बारे में / കുറിച്ച് | परिचयः | വിവരണം | `കുറിച്ച്` is a bound postposition, not a title; `विषये` is locative ("regarding"), use `परिचयः` for "About". |
+
+#### 8.5.4 Standard UI Glossary
+
+Use these exact terms across all apps, in all three languages. When a term you need is missing, add it
+**here**, in this standard, rather than inventing inconsistent per-app variants. All short UI terms
+MUST fit within the 22-character limit defined in Section 8.6.
+
+##### Navigation and structure
+
+| English | Malayalam | Sanskrit |
+|---|---|---|
+| Home | ഹോം | गृहम् |
+| Back | പിന്നോട്ട് | प्रत्यागमनम् |
+| Next | അടുത്തത് | अग्रिमम् |
+| Previous | മുമ്പത്തേത് | पूर्वम् |
+| Menu | മെനു | सूची |
+| More | കൂടുതൽ | अधिकम् |
+| Close | അടയ്ക്കുക | पिधीयताम् |
+| Exit | പുറത്തുകടക്കുക | निष्क्रमणम् |
+| Profile | പ്രൊഫൈൽ | परिचयः |
+| Notifications | അറിയിപ്പുകൾ | सूचनाः |
+| Favorites | പ്രിയപ്പെട്ടവ | प्रियाणि |
+| History | നാൾവഴി | इतिवृत्तम् |
+| Details | വിശദാംശങ്ങൾ | विवरणम् |
+| List | പട്ടിക | आवली |
+| Category | വിഭാഗം | वर्गः |
+| Page | താൾ | पृष्ठम् |
+| Section | ഖണ്ഡം | खण्डः |
+
+##### Actions (buttons, menu items)
+
+| English | Malayalam | Sanskrit |
+|---|---|---|
+| Save | സൂക്ഷിക്കുക | रक्ष्यताम् |
+| Cancel | റദ്ദാക്കുക | निरस्यताम् |
+| Delete | ഇല്ലാതാക്കുക | लुप्यताम् |
+| Edit | തിരുത്തുക | सम्पाद्यताम् |
+| Add | ചേർക്കുക | योज्यताम् |
+| Remove | നീക്കുക | अपनीयताम् |
+| Create | സൃഷ്ടിക്കുക | सृज्यताम् |
+| Update | നവീകരിക്കുക | अद्यतनीक्रियताम् |
+| Copy | പകർത്തുക | प्रतिलिख्यताम् |
+| Paste | ഒട്ടിക്കുക | स्थाप्यताम् |
+| Undo | പഴയപടിയാക്കുക | प्रत्यावर्त्यताम् |
+| Redo | വീണ്ടും ചെയ്യുക | पुनःक्रियताम् |
+| Search | തിരയുക | अन्विष्यताम् |
+| Filter | അരിക്കുക | परिशोध्यताम् |
+| Sort | ക്രമീകരിക്കുക | क्रमीक्रियताम् |
+| Refresh | പുതുക്കുക | नवीक्रियताम् |
+| Share | പങ്കിടുക | वितीर्यताम् |
+| Send | അയയ്ക്കുക | प्रेष्यताम् |
+| Download | ഡൗൺലോഡ് ചെയ്യുക | अवतार्यताम् |
+| Upload | അപ്‌ലോഡ് ചെയ്യുക | आरोप्यताम् |
+| Import | ഇറക്കുമതി ചെയ്യുക | आनीयताम् |
+| Export | കയറ്റുമതി ചെയ്യുക | निर्याप्यताम् |
+| Print | അച്ചടിക്കുക | मुद्र्यताम् |
+| Select | തിരഞ്ഞെടുക്കുക | चीयताम् |
+| Select all | എല്ലാം തിരഞ്ഞെടുക്കുക | सर्वं चीयताम् |
+| Clear | മായ്ക്കുക | रिक्तीक्रियताम् |
+| Reset | പുനഃസജ്ജമാക്കുക | पुनःसज्जीक्रियताम् |
+| Confirm | സ്ഥിരീകരിക്കുക | स्थिरीक्रियताम् |
+| Apply | പ്രയോഗിക്കുക | प्रयुज्यताम् |
+| Open | തുറക്കുക | उद्घाट्यताम् |
+| Start | ആരംഭിക്കുക | आरभ्यताम् |
+| Stop | നിർത്തുക | विरम्यताम् |
+| Pause | നിർത്തിവയ്ക്കുക | स्थग्यताम् |
+| Resume | പുനരാരംഭിക്കുക | पुनरारभ्यताम् |
+| Continue | തുടരുക | अनुवर्त्यताम् |
+| Skip | ഒഴിവാക്കുക | त्यज्यताम् |
+| Retry | വീണ്ടും ശ്രമിക്കുക | पुनः प्रयत्यताम् |
+| Login | പ്രവേശിക്കുക | प्रविश्यताम् |
+| Logout | ലോഗൗട്ട് ചെയ്യുക | निर्गम्यताम् |
+
+##### Settings and preferences
+
+| English | Malayalam | Sanskrit |
+|---|---|---|
+| Settings | ക്രമീകരണങ്ങൾ | विन्यासः |
+| Preferences | താൽപ്പര്യങ്ങൾ | रुचयः |
+| Language | ഭാഷ | भाषा |
+| Theme | തീം | रूपविन्यासः |
+| Dark mode | ഇരുണ്ട രൂപം | श्यामरूपम् |
+| Light mode | തെളിഞ്ഞ രൂപം | दीप्तरूपम् |
+| System default | സിസ്റ്റം സ്വതവേ | तन्त्रसिद्धम् |
+| Font size | അക്ഷരവലുപ്പം | अक्षरपरिमाणम् |
+| Sound | ശബ്ദം | ध्वनिः |
+| Vibration | കമ്പനം | कम्पनम् |
+| Backup | കരുതൽശേഖരം | प्रतिलिपिरक्षणम् |
+| Restore | പുനഃസ്ഥാപിക്കുക | पुनःस्थाप्यताम् |
+| Permissions | അനുമതികൾ | अनुमतयः |
+| Account | അക്കൗണ്ട് | उपयोक्तृविवरणम् |
+| Privacy | സ്വകാര്യത | गोपनीयता |
+| Security | സുരക്ഷ | सुरक्षा |
+| Storage | സംഭരണം | सङ्ग्रहः |
+| Data | വിവരങ്ങൾ | दत्तांशः |
+
+##### Status, feedback, and empty states
+
+| English | Malayalam | Sanskrit |
+|---|---|---|
+| Loading | ലോഡുചെയ്യുന്നു | आपूर्यते |
+| Please wait | കാത്തിരിക്കുക | प्रतीक्ष्यताम् |
+| Success | വിജയം | सफलम् |
+| Failed | പരാജയപ്പെട്ടു | असफलम् |
+| Error | പിശക് | दोषः |
+| Warning | മുന്നറിയിപ്പ് | पूर्वसूचना |
+| Information | വിവരം | सूचना |
+| Done | പൂർത്തിയായി | समाप्तम् |
+| Empty | ശൂന്യം | रिक्तम् |
+| No results | ഫലങ്ങളില്ല | न किमपि प्राप्तम् |
+| Offline | ഓഫ്‌ലൈൻ | असंयुक्तम् |
+| Online | ഓൺലൈൻ | संयुक्तम् |
+| Saved | സൂക്ഷിച്ചു | रक्षितम् |
+| Deleted | ഇല്ലാതാക്കി | लुप्तम् |
+| Copied | പകർത്തി | प्रतिलिखितम् |
+| Updated | നവീകരിച്ചു | अद्यतनीकृतम् |
+| Required | ആവശ്യം | आवश्यकम् |
+| Optional | ഐച്ഛികം | वैकल्पिकम् |
+| Invalid | അസാധു | अमान्यम् |
+
+##### Time and date
+
+| English | Malayalam | Sanskrit |
+|---|---|---|
+| Date | തീയതി | दिनाङ्कः |
+| Time | സമയം | समयः |
+| Today | ഇന്ന് | अद्य |
+| Yesterday | ഇന്നലെ | ह्यः |
+| Tomorrow | നാളെ | श्वः |
+| Now | ഇപ്പോൾ | इदानीम् |
+| Day | ദിവസം | दिनम् |
+| Week | ആഴ്ച | सप्ताहः |
+| Month | മാസം | मासः |
+| Year | വർഷം | वर्षम् |
+| Duration | ദൈർഘ്യം | कालावधिः |
+
+##### Content and fields
+
+| English | Malayalam | Sanskrit |
+|---|---|---|
+| Title | ശീർഷകം | शीर्षकम् |
+| Name | പേര് | नाम |
+| Description | വിവരണം | वर्णनम् |
+| Note | കുറിപ്പ് | टिप्पणी |
+| Text | പാഠം | पाठः |
+| Image | ചിത്രം | चित्रम् |
+| Audio | ഓഡിയോ | श्रव्यम् |
+| Video | വീഡിയോ | दृश्यम् |
+| File | ഫയൽ | सञ्चिका |
+| Folder | ഫോൾഡർ | संपुटम् |
+| Document | രേഖ | लेखः |
+| Link | ലിങ്ക് | अनुबन्धः |
+| Word | വാക്ക് | शब्दः |
+| Line | വരി | पङ्क्तिः |
+| Number | സംഖ്യ | सङ्ख्या |
+| Total | ആകെ | योगः |
+| Count | എണ്ണം | गणना |
+| Size | വലുപ്പം | परिमाणम् |
+| Type | തരം | प्रकारः |
+| Status | നില | स्थितिः |
+
+##### Confirmation words
+
+| English | Malayalam | Sanskrit |
+|---|---|---|
+| Yes | അതെ | आम् |
+| No | ഇല്ല | न |
+| OK | ശരി | अस्तु |
+| Are you sure? | ഉറപ്പാണോ? | निश्चयेन वा? |
+
+##### About screen (matches the `aboutDetail<Key>` ARB keys in `guideline.md` §1.6)
+
+| English | Malayalam | Sanskrit |
+|---|---|---|
+| About | ആപ്പിനെക്കുറിച്ച് | विषयपरिचयः |
+| Version | പതിപ്പ് | संस्करणम् |
+| Build | നിർമ്മിതി | निर्मितिसङ्ख्या |
+| Author | രചയിതാവ് | लेखकः |
+| Email | ഇമെയിൽ | विद्युत्पत्रम् |
+| License | ലൈസൻസ് | अनुज्ञापत्रम् |
+| AI used | ഉപയോഗിച്ച AI | प्रयुक्ता कृत्रिमबुद्धिः |
+| IDE used | ഉപയോഗിച്ച IDE | प्रयुक्तं विकाससाधनम् |
+| Help | സഹായം | साहाय्यम् |
+| Feedback | പ്രതികരണം | प्रतिक्रिया |
+| Contact | ബന്ധപ്പെടുക | सम्पर्कः |
+| Terms | നിബന്ധനകൾ | नियमाः |
+| Privacy policy | സ്വകാര്യതാ നയം | गोपनीयतानीतिः |
+
+> One entry exceeds the short-label budget in 8.6 on purpose — `प्रयुक्ता कृत्रिमबुद्धिः`
+> (24 characters) is an About-screen row label, which wraps to two lines acceptably. Do not
+> copy that liberty into a toolbar or a tab.
+
+### 8.6 Label Conciseness (Short UI Text vs. Descriptive Text)
+
+UI chrome MUST be short in **all three** languages. A long Malayalam or Sanskrit word wrapping onto
+two lines in a toolbar, tab, or bottom-navigation item is a layout bug, and Malayalam and Sanskrit
+compounds grow fast if written carelessly.
+
+**Budget for short text** — menu items, buttons, tabs, chips, navigation destinations, tooltips,
+app-bar titles, list-row labels, form-field labels, switch/checkbox labels, dialog action buttons:
+
+| Language | Target | Hard limit |
+|---|---|---|
+| English | 1–2 words | 20 characters |
+| Malayalam | 1–2 words | 22 characters |
+| Sanskrit | 1 word (nominal form preferred) | 22 characters |
+
+Rules:
+
+- Prefer a single word. Drop articles and filler: "Delete" not "Delete this item".
+- In Sanskrit follow the form convention in 8.5: a nominal form for titles, tabs and labels
+  (`अन्वेषणम्`), a single-word polite imperative for buttons (`अन्विष्यताम्`). Never a multi-word
+  verb phrase.
+- In Malayalam prefer the common everyday word over a Sanskritized formal one, unless the app's
+  subject matter calls for the formal register.
+- Do not solve a long translation by shrinking the font, truncating, or adding an ellipsis —
+  choose a shorter word.
+- Sentence case in English (`Add note`), not Title Case, and never ALL CAPS in Malayalam or
+  Sanskrit.
+
+**Descriptive text is exempt** from the budget — and MUST still be complete, natural prose in all
+three languages: onboarding copy, empty-state explanations, help text, About `description`, error
+explanations, confirmation dialog bodies, notification bodies, tutorial content.
+
+**ARB key naming makes the category checkable.** Prefix every key so the budget can be enforced
+mechanically:
+
+| Prefix | Category | Budget |
+|---|---|---|
+| `action…` | buttons, menu items, dialog actions | short |
+| `label…` | field labels, row labels, chips | short |
+| `title…` | screen / app-bar / dialog titles | short |
+| `tab…`, `nav…` | tabs and navigation destinations | short |
+| `tooltip…` | tooltips on icon-only controls (7.8) | short |
+| `desc…`, `help…`, `empty…`, `error…`, `body…` | descriptive prose | exempt |
+
+```dart
+// test/l10n/label_length_test.dart — fails when a short key exceeds its budget.
+const shortPrefixes = ['action', 'label', 'title', 'tab', 'nav', 'tooltip'];
+const limits = {'en': 20, 'ml': 22, 'sa': 22};
+// For each ARB file: for each key starting with a short prefix,
+// expect(value.characters.length, lessThanOrEqualTo(limits[locale]!));
+```
+
+### 8.7 Per-Feature Language Completeness
+
+A feature is **not done** until it works fully in English, Malayalam and Sanskrit.
+
+- No feature may ship with strings in `app_en.arb` only. Adding a key to the template without
+  adding it to `app_ml.arb` and `app_sa.arb` MUST fail CI.
+- No feature may render English text under `ml` or `sa` — including snackbars, validation messages,
+  notification text, share sheets, exported file headers a user sees, and the About screen.
+- Feature-level content shipped as an asset (JSON, Markdown help pages, seed data a user reads)
+  MUST also carry all three languages, or the screen that shows it MUST resolve a per-language
+  asset (`assets/content/help_<lang>.md`).
+- Screenshots for a release are taken in all three languages when the feature changes layout.
+- Widget tests for a screen MUST run in all three locales (pump with `locale: Locale('ml')` and
+  `Locale('sa')`), asserting no overflow and no untranslated English leaking through.
+
+**Key parity test** — required in every app:
+
+```dart
+// test/l10n/arb_parity_test.dart
+void main() {
+  test('every ARB file has the same keys as the template', () {
+    final en = _keys('lib/l10n/app_en.arb');
+    for (final locale in ['ml', 'sa']) {
+      final other = _keys('lib/l10n/app_$locale.arb');
+      expect(other.difference(en), isEmpty, reason: 'extra keys in $locale');
+      expect(en.difference(other), isEmpty, reason: 'missing keys in $locale');
+    }
+  });
+
+  test('no translation is a copy of the English value', () {
+    // Flags untranslated placeholders. Allow-list proper nouns and
+    // language-independent values (app name, brand, symbols) explicitly.
+  });
+}
+
+Set<String> _keys(String path) =>
+    (jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>)
+        .keys
+        .where((k) => !k.startsWith('@'))
+        .toSet();
+```
+
+### 8.8 RTL Layout Support
 
 - Never use `left` and `right` for padding, alignment, or positioning of UI elements. Use `start`
   and `end` equivalents: `EdgeInsetsDirectional`, `AlignmentDirectional`, `MainAxisAlignment.start`.
 - Use `Directionality` widget tests to verify layouts do not break in RTL mode.
 - Icons that carry directional meaning (back arrow, forward arrow) MUST be mirrored in RTL.
   Use `Directionality.of(context)` or set `textDirection` in `Icon` semantics.
-- Test RTL by adding `Arabic` or `Hebrew` to `supportedLocales` and switching the device locale.
+- None of our three shipped languages is RTL, so these rules are about staying ready rather than a
+  current feature. Test RTL by wrapping a screen in `Directionality(textDirection: TextDirection.rtl)`
+  in a widget test — do **not** add Arabic or Hebrew to `supportedLocales`, which is fixed at
+  `en`, `ml`, `sa` (8.3).
 
-### 8.4 Locale-Sensitive Formatting
+### 8.9 Locale-Sensitive Formatting
 
 Use the `intl` package for all locale-sensitive formatting. Never use `toString()` on dates,
-numbers, or currencies in user-visible strings.
+numbers, or currencies in user-visible strings. Pass `formattingLocale(...)` from 8.3.2 as the
+`locale` argument, so Sanskrit falls back to English CLDR data instead of throwing.
 
 ```dart
 import 'package:intl/intl.dart';
@@ -1967,6 +2672,11 @@ activates automatically in release builds when icons are referenced via `const` 
   configuration violates offline requirements; verify the configuration in your app's startup
   before relying on `google_fonts`.
 - Document font sources and licenses in `docs/architecture.md` or a `LICENSES` file.
+- **Script coverage is part of licensing work.** Because every app ships Malayalam and Sanskrit
+  (section 8.3.3), the chosen font stack MUST cover the Malayalam and Devanagari blocks, or the
+  app MUST bundle fonts that do (Noto Sans Malayalam and Noto Sans Devanagari are OFL). Runtime
+  fetching is not acceptable for these — a device offline on first launch would render boxes for
+  two of the three languages.
 
 ---
 
@@ -2242,7 +2952,12 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Do not invent abstractions for one-time operations.
 - Apply the security profile in force; never log secrets or weaken cryptographic behavior.
 - Ensure all `plans/` and `change_log/` entries follow the privacy rule in 21.1.1: **relative repository paths only**, **no local system details** (OS user name, computer/host name, home or drive-letter paths, network shares, LAN/internal IPs, local server URLs with ports, device serial numbers, personal email addresses), and **no secrets** (API keys, tokens, passwords, keystore passphrases, credentials, PII).
-- Put all user-visible strings in `lib/l10n/*.arb` and read them through `AppLocalizations` (section 8.2) — never a raw string literal in a widget, even in a single-language app.
+- Put all user-visible strings in `lib/l10n/*.arb` and read them through `AppLocalizations` (section 8.2) — never a raw string literal in a widget.
+- Add every new key to **all three** ARB files — `app_en.arb`, `app_ml.arb`, `app_sa.arb` — with a real translation in each (sections 8.2, 8.7). Never leave the English value as a placeholder in the Malayalam or Sanskrit file.
+- Never use Hindi anywhere as a substitute or crutch for Sanskrit: Sanskrit is fully generative and possesses all roots, affixes, and compounding formulas to create any technical or future terminology. Follow the rules, the forbidden-marker gate, and the glossary in 8.5. Flag any Sanskrit string you are not confident about in the change log so a Sanskrit reader can review it.
+- Keep `action…`, `label…`, `title…`, `tab…`, `nav…` and `tooltip…` strings within the length budget in 8.6; only `desc…`/`help…`/`empty…`/`error…`/`body…` keys may be long.
+- Give every icon-only control a localized `tooltip:` (section 7.8).
+- Keep the About screen data-driven and localized, and never remove the "Made with ❤️ from India" badge (`guideline.md` §1.6–§1.7).
 - Do not use `kDebugMode` or `kReleaseMode` as a substitute for application flavor when the
   project has explicit environments.
 - Always add `const` to constructors and widget instantiations where possible.
@@ -2278,8 +2993,17 @@ A task is complete only when all applicable items are true.
 - `dart format .` produces no required follow-up changes.
 - No secrets, build output, or local machine files were added to git.
 - All `plans/` and `change_log/` files use relative repository paths only and contain zero local system details and zero sensitive data — safe to publish on the internet (section 21.1.1).
-- `l10n.yaml` and `lib/l10n/app_<base>.arb` exist, and every user-visible string added or changed by
-  this task comes from `AppLocalizations` (section 8.2).
+- `l10n.yaml` and all three ARB files (`app_en.arb`, `app_ml.arb`, `app_sa.arb`) exist, and every
+  user-visible string added or changed by this task comes from `AppLocalizations` (section 8.2).
+- Every ARB key added or changed by this task exists and is genuinely translated in all three
+  files; the parity test passes (section 8.7).
+- Sanskrit strings pass the Hindi-marker gate and follow the glossary (section 8.5).
+- Short-label keys are within the length budget for all three languages (section 8.6).
+- Every icon-only control added or changed has a localized tooltip (section 7.8).
+- The screen was checked in all three languages — no English leaking through, no overflow, no
+  missing glyphs (sections 8.3.3, 8.7).
+- The About screen still ends with the "Made with ❤️ from India" badge if this task touched About
+  (`guideline.md` §1.7).
 - Generated files were regenerated if any annotated source was changed.
 
 ### 23.2 Production App Extension
@@ -2292,6 +3016,8 @@ A task is complete only when all applicable items are true.
 - No new jank frames introduced on the primary user flow (verified in profile mode if the change
   touched rendering, lists, or animations).
 - App size budget was checked if a new dependency was added.
+- The Google Play readiness gate in `docs/release_process.md` still holds for any change touching
+  the manifest, permissions, target SDK, signing, data collection, or store-listed behavior.
 
 ### 23.3 Sensitive Data Extension
 

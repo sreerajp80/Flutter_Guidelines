@@ -18,7 +18,7 @@ That is why cross-references inside the documents use a `docs/` prefix — for e
 
 | Document | What it is |
 |---|---|
-| [guideline.md](guideline.md) | My personal cross-app conventions: About-screen JSON config, the release keystore rules, and the baseline `lib/` folder layout. **This is the source of truth for keystore rules.** |
+| [guideline.md](guideline.md) | My personal cross-app conventions: About-screen JSON config and its fixed "Made with ❤️ from India" badge, the three mandatory app languages (English / Malayalam / Sanskrit), the release keystore rules, and the baseline `lib/` folder layout. **This is the source of truth for keystore rules.** |
 | [flutter_project_engineering_standard.md](flutter_project_engineering_standard.md) | The master, project-agnostic rulebook — rules that apply to *every* app (structure, UI, accessibility, performance, database, logging, security, CI, git, Definition of Done). |
 | [architecture.md](architecture.md) | A per-project architecture blueprint template. You fill it in with one app's actual decisions. |
 | [flutter_build_flavors_guide.md](flutter_build_flavors_guide.md) | A platform-by-platform technical reference for setting up build flavors on Android, iOS, and Windows. |

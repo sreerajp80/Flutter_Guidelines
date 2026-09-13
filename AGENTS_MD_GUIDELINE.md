@@ -207,13 +207,29 @@ flutter build appbundle --flavor prod --release \
 
 ---
 
-## Localization rules   <!-- mandatory for every app, even single-language -->
+## Localization rules   <!-- mandatory for every app: English, Malayalam, Sanskrit -->
 
+- This app ships three languages: **English (`en`), Malayalam (`ml`), Sanskrit (`sa`)**. Every
+  feature and every screen works in all three.
 - All user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations` — never a raw string
-  literal in a widget. This applies even though the app ships only <en>.
-- `l10n.yaml` (project root) and `lib/l10n/app_<base>.arb` must exist. Run `flutter gen-l10n`
-  after editing any `.arb` file.
-- Every ARB key needs an `@key` description entry.
+  literal in a widget.
+- `l10n.yaml` (project root) and all three ARB files (`app_en.arb`, `app_ml.arb`, `app_sa.arb`)
+  must exist. Run `flutter gen-l10n` after editing any `.arb` file.
+- Every new key goes into **all three** files with a real translation. Never leave the English
+  value sitting in `app_ml.arb` or `app_sa.arb`.
+- Every ARB key needs an `@key` description entry in the template file.
+- **Sanskrit means Sanskrit, not Hindi in Devanagari.** No Hindi copulas/postpositions/verb endings
+  (`है`, `करें`, `नहीं`, `सेटिंग्स`), no nukta letters. Use the glossary in the engineering standard
+  §8.5 and flag anything you are unsure of for human review.
+- `supportedLocales` is `en`, `ml`, `sa`, and the Sanskrit Material/Cupertino fallback delegates are
+  registered (§8.3.1) — Flutter ships no Sanskrit framework translation. Format dates and numbers
+  with the `formattingLocale(...)` helper, never `DateFormat(..., 'sa')`.
+- The language is user-selectable in Settings (System default / English / മലയാളം / संस्कृतम्),
+  persisted, and applied without restarting the app.
+- Menu, button, label, tab and tooltip strings stay short in all three languages (§8.6); only
+  `desc…`/`help…`/`empty…`/`error…`/`body…` keys may be long prose.
+- Every icon-only control has a localized `tooltip:` (§7.8).
+- The About screen is data-driven, localized, and ends with the "Made with ❤️ from India" badge.
 - Literals are allowed only for logs, non-UI exception messages, asset paths, route names, and
   map/JSON keys.
 
@@ -351,6 +367,10 @@ Do not shorten these into a single link. Keep the short inline version shown in 
 - [ ] Build commands are copy-paste ready and match the project's flavors.
 - [ ] Workflow rules (plan/approve/log) and simple-English rule are present, inline.
 - [ ] `plans/` and `change_log/` entries use relative paths only and contain zero local system details and zero sensitive data — safe to publish on the internet.
-- [ ] A localization rule is present: all user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations`, even if the app ships one language.
+- [ ] A localization rule is present: all user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations`.
+- [ ] The three mandatory languages are named: English, Malayalam, Sanskrit — with key parity across `app_en.arb`, `app_ml.arb`, `app_sa.arb`.
+- [ ] The Sanskrit-not-Hindi rule and the in-app language picker rule are present.
+- [ ] The tooltip rule (every icon-only control) and the short-label rule are present.
+- [ ] The About-screen rule is present, including the "Made with ❤️ from India" badge.
 - [ ] Every `<...>` placeholder from the template is replaced or its section deleted.
 - [ ] Rules in `AGENTS.md` match `CLAUDE.md` exactly.
