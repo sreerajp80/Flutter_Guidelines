@@ -369,6 +369,7 @@ Do not shorten these into a single link. Keep the short inline version shown in 
 - [ ] `plans/` and `change_log/` entries use relative paths only and contain zero local system details and zero sensitive data — safe to publish on the internet.
 - [ ] A localization rule is present: all user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations`.
 - [ ] The three mandatory languages are named: English, Malayalam, Sanskrit — with key parity across `app_en.arb`, `app_ml.arb`, `app_sa.arb`.
+- [ ] Localization rules explicitly specify all three: English (`en`), Malayalam (`ml`), and Sanskrit (`sa`). Never drop Sanskrit.
 - [ ] The Sanskrit-not-Hindi rule and the in-app language picker rule are present.
 - [ ] The tooltip rule (every icon-only control) and the short-label rule are present.
 - [ ] The About-screen rule is present, including the "Made with ❤️ from India" badge.

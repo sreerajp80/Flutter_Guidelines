@@ -34,7 +34,11 @@ Every app MUST use exactly these paths and these class names (`AppConfig`, `Conf
 
 ```json
 {
-  "appName": "My App Name",
+  "appName": {
+    "en": "SreerajP PDF App",
+    "ml": "ശ്രീരാജ് പി പിഡിഎഫ് ആപ്പ്",
+    "sa": "श्रीराजः पी पीडीएफ् अनुप्रयोगः"
+  },
   "description": {
     "en": "One-line description of what the app does.",
     "ml": "ആപ്പ് എന്തു ചെയ്യുന്നു എന്നതിന്റെ ഒറ്റവരി വിവരണം.",
@@ -43,15 +47,27 @@ Every app MUST use exactly these paths and these class names (`AppConfig`, `Conf
   "version": "1.0.0",
   "build": "1",
   "details": {
-    "author": "Your Name",
-    "email": "<Email>",
+    "author": {
+      "en": "Sreeraj P",
+      "ml": "ശ്രീരാജ് പി",
+      "sa": "श्रीराजः पी"
+    },
+    "email": "sreerajp@zohomail.in",
     "license": {
       "en": "All libraries used are open source.",
       "ml": "ഉപയോഗിച്ച എല്ലാ ലൈബ്രറികളും ഓപ്പൺ സോഴ്സ് ആണ്.",
       "sa": "सर्वाणि प्रयुक्तानि पुस्तकालयानि मुक्तस्रोतानि सन्ति।"
     },
-    "aiUsed": "<AI Name>",
-    "ideUsed": "<IDE Name>"
+    "aiUsed": {
+      "en": "Anthropic Claude / Google Gemini",
+      "ml": "ആന്ത്രോപിക് ക്ലോഡ് / ഗൂഗിൾ ജെമിനി",
+      "sa": "ആन्त्रोपिक् क्लोड् / गूगल् जेमिनि"
+    },
+    "ideUsed": {
+      "en": "Visual Studio Code / Antigravity",
+      "ml": "വിഷ്വൽ സ്റ്റുഡിയോ കോഡ് / ആന്റിഗ്രാവിറ്റി",
+      "sa": "विश्वल् स्टुडियो कोड् / आन्टिग्राविटि"
+    }
   }
 }
 ```
@@ -59,11 +75,13 @@ Every app MUST use exactly these paths and these class names (`AppConfig`, `Conf
 - `appName`, `description`, `version`, `build` are required top-level fields.
 - `details` is a free map. Add or remove rows as needed; the About screen renders each
   entry as a labelled row.
-- **Any text value MAY be either a plain string or a locale map**
-  `{"en": …, "ml": …, "sa": …}`. A plain string means "the same text in every language" —
-  correct for values that do not translate (a name, an email address, a tool name), wrong
-  for a sentence. Sentences and anything a user reads as prose MUST use the locale map with
-  all three languages filled in (§3, engineering standard §8.3).
+- **Only technical, non-display values** that are never shown as user-facing text — such as
+  email addresses, URLs, version strings, and build numbers — MAY be plain strings.
+- **`appName`, `author`, `aiUsed`, and `ideUsed` MUST use the full locale map**
+  `{"en": …, "ml": …, "sa": …}` with transliterations in Malayalam and Sanskrit. These are
+  display values that appear on screen and must be readable in each script.
+- Sentences, prose, and anything a user reads as descriptive text MUST use the locale map
+  with all three languages filled in (§3, engineering standard §8.3).
 - **Detail keys are identifiers, not labels.** Use `lowerCamelCase` keys (`author`,
   `aiUsed`); the visible label comes from ARB key `aboutDetail<Key>` (`aboutDetailAuthor`,
   `aboutDetailAiUsed`) so the label itself is translated. See §1.6.
@@ -137,7 +155,7 @@ class LocalizedText {
 /// Typed values for the About screen, loaded from `assets/config/app_config.json`.
 /// Changing About content is a config edit, not a code change.
 class AppConfig {
-  final String appName;
+  final LocalizedText appName;
   final LocalizedText description;
   final String version;
   final String build;
@@ -154,7 +172,7 @@ class AppConfig {
   /// Safe built-in value used when the config file is missing or malformed,
   /// so the app never crashes on a bad config.
   static const AppConfig fallback = AppConfig(
-    appName: 'My App',
+    appName: LocalizedText.plain('My App'),
     description: LocalizedText.plain('A Flutter application.'),
     version: '0.0.0',
     build: '0',
@@ -181,7 +199,10 @@ class AppConfig {
     }
 
     return AppConfig(
-      appName: str('appName', fallback.appName),
+      appName: LocalizedText.fromJson(
+        json['appName'],
+        fallback: fallback.appName.resolve('en'),
+      ),
       description: LocalizedText.fromJson(
         json['description'],
         fallback: fallback.description.resolve('en'),
