@@ -1591,11 +1591,19 @@ reader before any app uses it. The change that adds the term lists it in its cha
 | Word | വാക്ക് | शब्दः |
 | Line | വരി | पङ्क्तिः |
 | Number | സംഖ്യ | सङ्ख्या |
+| Phone number | ഫോൺ നമ്പർ | दूरभाषसङ्ख्या |
+| Contact / Contacts | വിലാസവിവരം / വിലാസവിവരങ്ങൾ | सम्पर्कः / सम्पर्काः |
+| Call (phone call) | ഫോൺ വിളി | आह्वानम् |
+| Tag / Tags | അടയാളം / അടയാളങ്ങൾ | चिह्नम् / चिह्नानि |
 | Total | ആകെ | योगः |
 | Count | എണ്ണം | गणना |
 | Size | വലുപ്പം | परिमाणम् |
 | Type | തരം | प्रकारः |
 | Status | നില | स्थितिः |
+
+> **Phone number vs. Number.** A telephone number is `ഫോൺ നമ്പർ` in Malayalam; `സംഖ്യ` reads as
+> "numeral" and stays the word for a plain number. Contact and Tag list the singular and plural
+> forms because apps need both ("1 contact", "all contacts").
 
 ##### Confirmation words
 
