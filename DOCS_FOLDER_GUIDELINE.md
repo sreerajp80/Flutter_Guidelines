@@ -113,16 +113,17 @@ Write absolute dates (`2026-07-18`), never "today" or "last week".
 
 When generating or initializing the `docs/` folder for a new Flutter app, **always create the complete baseline set** of documents below. Do not omit any document from this initial set:
 
-1. **`architecture.md`** (Living) — Technical design, layers, data models, and component boundaries.
-2. **`security.md`** (Living) — Security rules, permissions, threat model, and offline boundaries.
-3. **`release_process.md`** (Living) — Keystore signing, versioning, build commands, and release runbook.
-4. **`workflow_rules.md`** (Living) — Plan-before-changing, explicit user approval gate, and log-after-changing rules.
-5. **`dependencies.md`** (Living) — Approved baseline packages and explicit prohibited dependencies list.
-6. **`project_structure.md`** (Living) — Project file tree and directory responsibility layout.
-7. **`implementation_plan.md`** (Point-in-time) — Phase-by-phase build roadmap with objectives and action steps (starts with `**Date:**`).
-8. **`implementation_progress.md`** (Point-in-time) — Live status checklist by phase (`- [x]` / `- [ ]`, starts with `**Date:**`).
+1. **`PROJECT_PROFILE.md`** (Living) — Filled in from `PROJECT_PROFILE_TEMPLATE.md`: identity, target platforms, stores, declared languages, About options. Create it **first**; every other doc depends on it.
+2. **`architecture.md`** (Living) — Technical design, layers, data models, and component boundaries.
+3. **`security.md`** (Living) — Security rules, permissions, threat model, and offline boundaries.
+4. **`release_process.md`** (Living) — Signing for every declared platform, versioning, build commands, store gates, and release runbook.
+5. **`workflow_rules.md`** (Living) — Plan-before-changing, explicit user approval gate, and log-after-changing rules.
+6. **`dependencies.md`** (Living) — Approved baseline packages and explicit prohibited dependencies list.
+7. **`project_structure.md`** (Living) — Project file tree and directory responsibility layout.
+8. **`implementation_plan.md`** (Point-in-time) — Phase-by-phase build roadmap with objectives and action steps (starts with `**Date:**`).
+9. **`implementation_progress.md`** (Point-in-time) — Live status checklist by phase (`- [x]` / `- [ ]`, starts with `**Date:**`).
 
-Together with `GUIDELINES_MANIFEST.md` and the `guidelines/` submodule, these 8 documents form the complete baseline documentation suite required for every new project.
+Together with `GUIDELINES_MANIFEST.md` and the `guidelines/` submodule, these 9 documents form the complete baseline documentation suite required for every new project.
 
 ---
 
@@ -133,16 +134,18 @@ skeleton. Prefer these names over inventing new ones.
 
 | File (`snake_case`) | Kind | What it is | Typical sections |
 | --- | --- | --- | --- |
+| `PROJECT_PROFILE.md` | Living | The project's declared choices — identity, platforms, stores, languages, About options. Copy from the submodule's `PROJECT_PROFILE_TEMPLATE.md`. | Identity · Profiles · Platforms and distribution · Languages · About screen · Optional values |
 | `architecture.md` | Living | The app's technical design — layers, packages, folder tree, key flows. Fill in from the submodule blueprint. | Project config · Design goals · Layered architecture · Packages · Folder structure · Theme · Key interactions · Non-functional requirements |
 | `security.md` (or `security_rules.md`) | Living | Security rules and/or blueprint — threat model, permissions, crypto, data handling. Short "rules" file may link to a fuller blueprint. | Boundaries/offline rules · Minimal permissions · Input validation · Secrets handling · OWASP/threat checklist |
 | `release_process.md` / `release_signing.md` | Living | How to build, sign, and ship a release. | Secrets warning callout · What the build expects · Generate keystore · `key.properties` · Build commands · Verify signature · Backup checklist |
-| `workflow_rules.md` | Living | Plan-before-changing and log-after-changing rules for this project (mirrors the global workflow). | Plan before changing · Approval gate · Log after changing |
+| `workflow_rules.md` | Living | Plan-before-changing and log-after-changing rules for this project (mirrors the workflow in `CLAUDE_MD_GUIDELINE.md`). | Plan before changing · Approval gate · Log after changing |
 | `<app>_idea.md` | Living | The product concept and requirements — the "why" and "what". | Core concept · Experience/UX · Design system · Navigation · Development phases |
 | `implementation_plan.md` | Point-in-time | Phase-by-phase build plan with objectives and action steps. | One `##` per phase (Objective + Action steps) · Verification / Definition of Done |
 | `implementation_progress.md` | Point-in-time | Live checklist of what is done. | Status overview · Detailed task checklist by phase (`- [x]`) |
 | `known_gaps.md` | Point-in-time | What is declared but not integrated, and resolved items. | Resolved (dated) · Still open / not integrated · Out of scope |
 | `dependencies.md` | Living | Notable packages and their integration status. | Grouped bullet list by concern (declared vs integrated) |
 | `project_structure.md` | Living | The project file tree, for quick orientation. | A single fenced tree, or short notes + tree |
+| `glossary.md` | Living | Project terms and their approved translation in each declared language (engineering standard §8.5). | One table: term · each declared language · notes |
 | `security_audit_phase*.md` | Point-in-time | A dated, rule-by-rule audit record. | Date/Scope/Result header · How to re-run checks · Rule-by-rule findings |
 
 If what you need is **not** in this table, it is probably a section inside an existing doc

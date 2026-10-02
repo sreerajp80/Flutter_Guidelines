@@ -31,6 +31,25 @@ A simple internal tool may use only `Core Baseline`.
 A public consumer app will usually use `Core Baseline` plus `Production App Extension`.
 An authenticator, password manager, finance, or health app will usually use all three.
 
+#### 1.2.1 Project Profile (Mandatory)
+
+Every app repository MUST have a `docs/PROJECT_PROFILE.md`, filled in from
+`PROJECT_PROFILE_TEMPLATE.md`. It is the one place that records the choices this standard leaves
+open, so neither people nor AI agents have to guess them:
+
+- app identity — name, organization, reverse-DNS application / bundle id;
+- applicability profiles in force (this section);
+- **target platforms** — any of Android, iOS, Windows, macOS, Linux, Web;
+- **distribution channels** per platform — e.g. Google Play, Apple App Store, Microsoft Store,
+  Mac App Store, Developer ID download, Snap Store, Flathub, direct download;
+- **declared languages** (section 8) and any language packs that apply;
+- About-screen options, including the optional signature badge (`guideline.md` §1.7);
+- minimum OS versions per platform.
+
+Rules elsewhere in this standard that depend on a platform, store, or language apply **only when
+the profile declares it**. For every declared distribution channel, the matching gate in
+`platform_store_readiness.md` MUST pass before the first release to that channel.
+
 ### 1.3 Repository Types
 
 This document primarily targets Flutter application repositories.
@@ -131,11 +150,12 @@ These rules apply to all app repositories.
 
 ```text
 project/
-|-- android/                  # Optional for non-Android targets or packages
-|-- ios/                      # Optional for non-iOS targets or packages
-|-- windows/                  # Optional for non-Windows targets
-|-- linux/                    # Optional
-|-- macos/                    # Optional
+|-- android/                  # Required when Android is a declared platform
+|-- ios/                      # Required when iOS is a declared platform
+|-- windows/                  # Required when Windows is a declared platform
+|-- macos/                    # Required when macOS is a declared platform
+|-- linux/                    # Required when Linux is a declared platform
+|-- web/                      # Required when Web is a declared platform
 |-- assets/
 |   |-- config/               # app_config.json (About screen source of truth)
 |   |-- fonts/
@@ -144,7 +164,8 @@ project/
 |       |-- 2.0x/
 |       `-- 3.0x/
 |-- docs/
-|   `-- GUIDELINES_MANIFEST.md
+|   |-- GUIDELINES_MANIFEST.md
+|   `-- PROJECT_PROFILE.md    # Mandatory — platforms, stores, languages, identity (1.2.1)
 |-- plans/                    # change planning logs
 |-- change_log/               # implemented change logs
 |-- lib/
@@ -152,6 +173,7 @@ project/
 |-- integration_test/         # Required only when end-to-end coverage applies
 |-- .github/workflows/
 |-- CLAUDE.md                 # Mandatory project-root AI instructions (MUST)
+|-- AGENTS.md                 # Mandatory project-root instructions for other AI agents (MUST)
 |-- analysis_options.yaml
 |-- pubspec.yaml
 |-- README.md
@@ -160,6 +182,20 @@ project/
 
 Application repositories SHOULD commit `pubspec.lock`.
 Packages and plugins SHOULD follow normal package conventions.
+
+Create the platform folders with the Flutter tool, never by hand, and only for declared platforms:
+
+```bash
+# New app — org is your reverse-DNS prefix; list only the declared platforms.
+flutter create --org com.example --platforms=android,ios,windows,macos,linux my_app
+
+# Add a platform to an existing app later.
+flutter create --platforms=macos .
+```
+
+The application / bundle id MUST be the same reverse-DNS id on every platform where the store
+allows it (Android `applicationId`, iOS/macOS `PRODUCT_BUNDLE_IDENTIFIER`, Linux `APPLICATION_ID`,
+MSIX `identity_name` is assigned by Partner Center for the Microsoft Store).
 
 ---
 
@@ -336,6 +372,8 @@ flutter build apk --flavor prod --release
 # Windows / Linux / macOS desktop — APP_FLAVOR dart-define only
 flutter run -d windows --dart-define=APP_FLAVOR=dev
 flutter build windows --release --dart-define=APP_FLAVOR=prod
+flutter build macos --release --dart-define=APP_FLAVOR=prod
+flutter build linux --release --dart-define=APP_FLAVOR=prod
 ```
 
 Native Android and iOS flavor names SHOULD stay aligned with the Dart flavor value.
@@ -343,7 +381,7 @@ Native Android and iOS flavor names SHOULD stay aligned with the Dart flavor val
 ### 5.3 Android Flavor Setup
 
 When Android flavors are used, the project SHOULD define product flavors in
-`android/app/build.gradle.kts` (Kotlin DSL is the default for new projects on Flutter ≥ 3.41;
+`android/app/build.gradle.kts` (Kotlin DSL is the default for new projects since Flutter 3.41;
 Groovy DSL `build.gradle` is still supported in inherited projects but uses
 `flavorDimensions "environment"` without the `+=` operator).
 
@@ -363,16 +401,79 @@ android {
 }
 ```
 
-#### Toolchain Requirements (Flutter ≥ 3.38)
+#### Toolchain Requirements
 
-- **Java 17 minimum.** Flutter 3.38 raised the minimum required JDK to 17, matching the
-  Gradle 8.14 minimum. Java 11 builds will fail. Verify with `java -version`.
-- **AGP 9 is currently NOT supported.** As of Flutter 3.41, the team has paused AGP 9
-  migration while auditing backward compatibility. Do not upgrade `android/build.gradle.kts`
-  to AGP 9 even if Android Studio prompts to. Stay on AGP 8.x until guidance changes.
+This standard does not pin tool versions. The rules are:
+
+- **Use the latest stable Flutter** (and the Dart SDK that ships with it).
+- **Android: use the AGP, Kotlin Gradle Plugin (KGP) and Gradle versions that Flutter
+  generates.** `flutter create` writes them for new projects; `flutter upgrade` plus the
+  Flutter migrator update existing ones. Do NOT hand-pick or hand-downgrade them.
+- **Each project pins its own versions** in its own files: `android/settings.gradle.kts`
+  (AGP, KGP), `android/gradle/wrapper/gradle-wrapper.properties` (Gradle), `pubspec.lock`,
+  the CI image, and the identity table in `CLAUDE.md` / `AGENTS.md`.
+- **Look up versions, never guess them.** AI agents and contributors MUST read the current
+  versions from `flutter --version` and the project files above before writing or changing
+  build files. Never write a version from memory.
+- **Java 17 minimum.** Java 11 builds will fail. Verify with `java -version`.
+
+> **Reference snapshot — not a rule.** When this standard was last checked (2026-10), the
+> latest stable Flutter (3.47 / Dart 3.13) generated AGP 9.1.0, KGP 2.4.0 and Gradle 9.3.1.
+> Use this only to spot a project that is clearly behind.
+
+Since Flutter 3.47 the Android toolchain is AGP 9+ / Gradle 9+, so these rules apply:
+
+- **On AGP 9+, the `kotlinOptions { }` block is rejected.** Set the JVM target with the top-level
+  `kotlin { compilerOptions { } }` block in `android/app/build.gradle.kts`:
+
+  ```kotlin
+  import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+  kotlin {
+      compilerOptions {
+          jvmTarget.set(JvmTarget.JVM_17)
+      }
+  }
+  ```
+
+- **Migrator flags.** The Flutter migrator adds `android.builtInKotlin=false` and
+  `android.newDsl=false` to `android/gradle.properties`. Keep them until the Flutter app
+  template drops them.
+- **Gradle 9+ has no `project.exec { }`.** Custom Gradle tasks that run a process MUST use
+  an injected `ExecOperations` instead.
 - **R8 full mode is the default** since AGP 8.0. This is more aggressive about removing
   seemingly-unused classes — make ProGuard keep rules deliberate (see
   `docs/flutter_build_flavors_guide.md` ProGuard section).
+
+Full `settings.gradle.kts` and `build.gradle.kts` examples are in
+`docs/flutter_build_flavors_guide.md` ("Android Toolchain Baseline").
+
+#### Upgrading An Existing App To A New Flutter Release
+
+Do the upgrade as its own change, with no feature work mixed in:
+
+1. Read the official "What's new" post and breaking-changes list for every release you are
+   crossing.
+2. `flutter upgrade`, then `flutter pub upgrade` and `flutter pub outdated` to see which
+   plugins need a new major.
+3. Run `dart fix --apply`, plus any release-specific `dart fix --code=...` migration named in
+   the release notes.
+4. Let the Flutter migrator update the Android files (AGP, KGP, Gradle wrapper,
+   `gradle.properties`). Do NOT type versions from memory; check what Flutter wrote and keep
+   it. Raise iOS / macOS deployment targets if the release raised the minimum.
+5. Run `flutter analyze`, the full test suite, and a release build of every flavor. Update
+   the pinned versions in `CLAUDE.md` / `AGENTS.md` and the CI image, and record the upgrade
+   in `CHANGELOG.md`.
+
+**Extra steps when crossing Flutter 3.47:**
+
+- `dart fix --apply --code=migrate_design_widgets` moves Material and Cupertino imports to
+  `material_ui` / `cupertino_ui` (see 6.1). Plain `dart fix --apply` does **not** run it.
+  Replace any `material_ui: any` / `cupertino_ui: any` the tool wrote with a pinned `^`
+  version.
+- Android moves to AGP 9 / Gradle 9: replace `kotlinOptions { }` with
+  `kotlin { compilerOptions { } }`, and any `project.exec { }` with `ExecOperations`.
+- iOS minimum becomes 15 and macOS minimum becomes 12 (`ios/Podfile`, Xcode).
 
 #### 5.3.1 Android 16 KB Page Size Compliance
 
@@ -400,14 +501,16 @@ Required actions under `Production App Extension`:
 
 When iOS flavors are used, each flavor requires a separate Xcode scheme and xcconfig file pair.
 
-#### iOS Deployment Target And UIScene Migration (Flutter ≥ 3.38)
+#### iOS Deployment Target And UIScene Migration (Flutter ≥ 3.47)
 
-- **Minimum iOS deployment target: iOS 13.** Flutter 3.41 raised the minimum from iOS 12
-  to iOS 13. Set `platform :ios, '13.0'` in `ios/Podfile` and the iOS Deployment Target
-  in Xcode under Build Settings.
+- **Minimum iOS deployment target: iOS 15.** Flutter 3.47 raised the minimum from iOS 13
+  to iOS 15. Set `platform :ios, '15.0'` in `ios/Podfile` and the iOS Deployment Target
+  in Xcode under Build Settings. Apps that ship on macOS MUST target macOS 12 or later
+  (`platform :osx, '12.0'` in `macos/Podfile`; see 5.5.2).
 - **UIScene lifecycle is mandatory.** Apple requires UIScene adoption for any UIKit app
   built with the iOS 26 SDK; the App Store requires iOS 26 SDK builds, and that deadline
-  (April 2026) is now in force. As of Flutter 3.41, UIScene is enabled by default and the
+  (April 2026) is now in force. Apps built with Xcode 27 that do not adopt UIScene fail to
+  launch. UIScene is enabled by default (since Flutter 3.41) and the
   Flutter CLI automatically migrates apps with an unmodified `AppDelegate`. Watch the build
   log for `Finished migration to UIScene lifecycle` (success) or migration warnings (manual
   work required).
@@ -458,16 +561,21 @@ Each flavor SHOULD have its own `Info.plist` overrides for `CFBundleIdentifier` 
 
 Provisioning profiles MUST be set per scheme. Do not share production profiles with dev builds.
 
-### 5.5 Windows Desktop Build Setup
+### 5.5 Desktop Build Setup (Windows, macOS, Linux)
 
-Windows desktop does not use Android product flavors and does not currently accept the
+This section applies to each desktop platform the project declares. The shared rules come first,
+then one sub-section per platform (5.5.1 Windows, 5.5.2 macOS, 5.5.3 Linux). Store and
+direct-download release gates for each are in `platform_store_readiness.md`.
+
+Desktop targets do not use Android product flavors and do not currently accept the
 Flutter `--flavor` argument. Environment separation is achieved through
 `--dart-define=APP_FLAVOR=<value>` at build time, read by the `AppFlavorConfig` pattern from
 section 5.2. The dart-define name MUST be `APP_FLAVOR` (or any other non-reserved name) and
 MUST NOT be `FLUTTER_APP_FLAVOR` — that name is owned by the framework and any attempt to
 set it via `--dart-define` fails the build.
 
-Additional Windows-specific setup required before any DB or FFI work can run:
+Additional desktop setup required before any DB or FFI work can run (`sqflite` needs the FFI
+factory on Windows and Linux; macOS uses the normal plugin):
 
 ```dart
 // In main() before runApp, for Windows and Linux desktop:
@@ -509,20 +617,40 @@ Future<void> main() async {
 }
 ```
 
-**MSIX packaging** for Windows distribution:
+**Keyboard shortcuts** — register app-wide shortcuts using `Shortcuts` and `Actions` widgets at
+the root. Use the platform's modifier key (Cmd on macOS, Ctrl on Windows and Linux). Document all
+registered shortcuts in `docs/architecture.md`.
+
+**Context menus** — use `ContextMenuRegion` or `GestureDetector` with `onSecondaryTap` for
+right-click context menus on desktop. Do not assume touch-only interaction patterns.
+
+**Window resizing** — every screen MUST stay usable from the minimum window size up to a full
+4K screen. Use adaptive layouts (`LayoutBuilder`, breakpoints) instead of phone-only layouts.
+
+#### 5.5.1 Windows
+
+**App metadata.** Set the company, product and copyright strings in `windows/runner/Runner.rc`
+(`CompanyName`, `FileDescription`, `ProductName`, `LegalCopyright`) and replace
+`windows/runner/resources/app_icon.ico` with the real icon (17.5). The file version comes from
+`pubspec.yaml`.
+
+**MSIX packaging** (the `msix` package) is the default for Windows distribution:
 
 ```yaml
 # pubspec.yaml
 msix_config:
   display_name: MyApp
-  publisher_display_name: YourName
-  identity_name: com.yourcompany.myapp
-  msix_version: 1.0.0.0
-  logo_path: assets/icons/icon.png
-  capabilities: 'runFullTrust'
-  # Microsoft Store submission: produce a multi-architecture .msixbundle.
-  # Sideloading: a single architecture is sufficient — drop arm64.
-  architecture: x64, arm64
+  publisher_display_name: <Publisher display name>
+  identity_name: <from Partner Center, or your reverse-DNS id for sideloading>
+  publisher: <CN=... from Partner Center, or from your code-signing certificate>
+  msix_version: 1.0.0.0          # four parts; keep in step with pubspec.yaml
+  logo_path: assets/icons/app_icon.png
+  capabilities: internetClient   # least privilege — list only what the app uses
+  languages: en-us               # one entry per declared language
+  # Microsoft Store: set store: true — the Store signs the package, do not sign it yourself.
+  # store: true
+  # Direct download: sign with a trusted code-signing certificate kept OUTSIDE the repo,
+  # passed in by CI (certificate_path / certificate_password), never committed.
 ```
 
 Build command:
@@ -532,22 +660,110 @@ Build command:
 dart run msix:create
 ```
 
-**Keyboard shortcuts** — register app-wide shortcuts using `Shortcuts` and `Actions` widgets at
-the root. Document all registered shortcuts in `docs/architecture.md`.
+- **Microsoft Store**: build with `store: true`, with `identity_name`, `publisher` and
+  `publisher_display_name` copied exactly from Partner Center → Product identity.
+- **Direct download**: the MSIX (or an installer such as Inno Setup / WiX wrapping the release
+  folder) MUST be signed with a code-signing certificate trusted on the target machines.
+  Unsigned packages are blocked or warned about by SmartScreen and cannot be installed as MSIX.
+- A raw unsigned `build/windows/x64/runner/Release/` folder is acceptable for internal tools only.
 
-**Context menus** — use `ContextMenuRegion` or `GestureDetector` with `onSecondaryTap` for
-right-click context menus on desktop. Do not assume touch-only interaction patterns.
+#### 5.5.2 macOS
+
+**Identity.** Set `PRODUCT_NAME`, `PRODUCT_BUNDLE_IDENTIFIER` and `PRODUCT_COPYRIGHT` in
+`macos/Runner/Configs/AppInfo.xcconfig`. The bundle id SHOULD match the iOS one when both
+platforms are declared. Set the deployment target in `macos/Podfile` (`platform :osx, '<min>'`)
+and in Xcode, at or above the Flutter minimum (see 5.4).
+
+**Entitlements and App Sandbox.** macOS apps run in the **App Sandbox** (required for the Mac App
+Store, strongly recommended for Developer ID). Flutter creates two files:
+
+| File | Used for |
+|---|---|
+| `macos/Runner/DebugProfile.entitlements` | debug and profile builds |
+| `macos/Runner/Release.entitlements` | release builds — this is what ships |
+
+Add **only** the entitlements the app needs, to **both** files, for example:
+
+```xml
+<key>com.apple.security.app-sandbox</key>
+<true/>
+<!-- Outgoing network requests (HTTP, APIs). Missing this = every request fails in release. -->
+<key>com.apple.security.network.client</key>
+<true/>
+<!-- Files the user picks in an open/save panel (file_picker, file_selector). -->
+<key>com.apple.security.files.user-selected.read-write</key>
+<true/>
+```
+
+A missing entitlement often works in debug and fails only in release. Test the release build.
+
+**Signing.** In Xcode → Runner → Signing & Capabilities, select the team and enable
+**Hardened Runtime** for Release. Distribution needs either:
+
+- **Mac App Store** — an "Apple Distribution" certificate and a Mac App Store provisioning profile;
+  uploaded to App Store Connect (see `platform_store_readiness.md`).
+- **Direct download (Developer ID)** — a "Developer ID Application" certificate, then
+  **notarization** with `xcrun notarytool` and **stapling** with `xcrun stapler`. An un-notarized
+  app is blocked by Gatekeeper on users' Macs.
+
+**Flavors.** The `--dart-define=APP_FLAVOR=<name>` pattern (5.2) works on macOS and is the
+default. If a flavor needs its own bundle id or app name, add an Xcode scheme and xcconfig per
+flavor, the same way as iOS (5.4). Recent Flutter releases accept `--flavor` for macOS when a
+matching Xcode scheme exists — confirm with `flutter build macos -h` on the project's toolchain
+before relying on it. Either way, the two-variable `AppFlavorConfig` keeps working.
+
+**Secure storage** uses the Keychain (e.g. `flutter_secure_storage`); follow the plugin's macOS
+setup, which may require the Keychain Sharing capability.
+
+#### 5.5.3 Linux
+
+**Build machine.** Linux builds need the GTK toolchain. On Debian/Ubuntu:
+
+```bash
+sudo apt-get install clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+```
+
+Build release binaries on the **oldest distribution you support** (or inside its container), so
+the binary does not require a newer `glibc` than users have.
+
+**Identity.** Set `BINARY_NAME` and `APPLICATION_ID` in `linux/CMakeLists.txt`. `APPLICATION_ID`
+MUST be the reverse-DNS app id; desktop files, icons, Snap and Flatpak metadata all use it.
+
+```cmake
+set(BINARY_NAME "my_app")
+set(APPLICATION_ID "com.example.my_app")
+```
+
+**Desktop integration.** Ship a `<APPLICATION_ID>.desktop` file and icons (at least 256×256 PNG,
+plus SVG if available) so the app appears in the launcher with the right name and icon. Flatpak
+and Flathub also require an AppStream `<APPLICATION_ID>.metainfo.xml` file.
+
+**Packaging** — pick per declared channel (details in `platform_store_readiness.md`):
+
+| Channel | Format |
+|---|---|
+| Snap Store | `.snap`, built from `snap/snapcraft.yaml` (Flutter plugin) |
+| Flathub | Flatpak, built from a manifest in the Flathub repo |
+| Direct download | AppImage, `.deb`, and/or `.rpm` |
+
+**Secure storage** uses the Secret Service (`libsecret`, e.g. `flutter_secure_storage`). Add
+`libsecret-1-dev` to the build machine and declare the runtime dependency in the package.
 
 ### 5.6 Artifact Selection
 
-Under `Production App Extension`:
+Under `Production App Extension`, for each declared platform:
 
-- Android: Use split APKs when distributing directly; use `.aab` for Google Play submission.
-- iOS: Use `.ipa` exported via Xcode organizer or `flutter build ipa`.
-- Windows: Use MSIX for distribution. Raw `.exe` is acceptable for internal tools only.
+| Platform | Store artifact | Direct-download artifact |
+|---|---|---|
+| Android | `.aab` (Google Play) | split APKs (`--split-per-abi`) |
+| iOS | `.ipa` via `flutter build ipa` → App Store Connect | — (Ad Hoc / Enterprise only) |
+| Windows | `.msix` / `.msixbundle` with `store: true` (Microsoft Store) | signed `.msix` or signed installer `.exe` |
+| macOS | signed `.app` → `.pkg` uploaded to App Store Connect (Mac App Store) | Developer ID signed, notarized and stapled `.dmg` (or `.zip`) |
+| Linux | `.snap` (Snap Store), Flatpak (Flathub) | AppImage, `.deb`, `.rpm` |
+
 - Avoid universal release APKs unless there is a specific distribution reason.
-
-`--target-platform` does not replace `--split-per-abi`.
+- `--target-platform` does not replace `--split-per-abi`.
+- Raw, unsigned build folders are acceptable for internal tools only.
 
 ---
 
@@ -571,13 +787,30 @@ longer needed in `ThemeData`. New projects automatically receive M3 styling. `us
 false` and Material 2 support are slated for deprecation per Flutter's deprecation policy —
 do not introduce new code that depends on M2 visuals.
 
-#### Forward-Looking: Material And Cupertino Decoupling
+#### Material And Cupertino Packages (Flutter ≥ 3.47)
 
-Google has signaled that the Material and Cupertino libraries will move to versioned
-`pub.dev` packages over 2026 as part of Flutter's decoupling effort. Imports may change
-from `package:flutter/material.dart` to a dedicated package; migration tooling is expected.
-No action is required today, but be prepared for an import-rewrite pass when the change
-ships.
+Since Flutter 3.47, Material and Cupertino ship as standalone `pub.dev` packages:
+`material_ui` and `cupertino_ui`. The copies inside the SDK
+(`package:flutter/material.dart`, `package:flutter/cupertino.dart`) are scheduled for formal
+deprecation in the next stable release.
+
+- Every app MUST depend on `material_ui` (and `cupertino_ui` if it uses any Cupertino
+  widget or the Cupertino localization delegate), pinned with a `^` constraint:
+
+  ```yaml
+  dependencies:
+    material_ui: ^1.5.0     # Example — pin the current line at project start.
+    cupertino_ui: ^1.1.1    # Only if Cupertino widgets or delegates are used.
+  ```
+
+- New code MUST import `package:material_ui/material_ui.dart` /
+  `package:cupertino_ui/cupertino_ui.dart`, never `package:flutter/material.dart` or
+  `package:flutter/cupertino.dart`. `package:flutter/widgets.dart`,
+  `package:flutter/services.dart` and `package:flutter/foundation.dart` are unchanged.
+- Migrate existing code with `dart fix --apply --code=migrate_design_widgets`. The `--code`
+  part is required; plain `dart fix --apply` does not run this migration. If the tool adds
+  `material_ui: any`, replace it with a pinned `^` version.
+- Code samples in these guidelines that omit imports assume the `material_ui` import.
 
 ### 6.2 Widget Structure
 
@@ -905,7 +1138,7 @@ void expectAllIconButtonsHaveTooltips(WidgetTester tester) {
 }
 ```
 
-Run it for every screen under test, in all three locales, as part of the screen's widget test.
+Run it for every screen under test, in every declared locale, as part of the screen's widget test.
 
 ---
 
@@ -913,19 +1146,32 @@ Run it for every screen under test, in all three locales, as part of the screen'
 
 This section is `Core Baseline` and applies to every user-facing app repository.
 
-**Every app ships three languages: English (`en`), Malayalam (`ml`) and Sanskrit (`sa`).** There is
-no single-language app. The app starts in the system language when that is one of the three and in
-English otherwise, and the user can change the language inside the app at any time. Every feature,
-every screen, and every string — labels, menus, buttons, tooltips, dialogs, notifications, errors,
-empty states, About content — renders in the language the user selected.
+**Every app externalizes its strings and ships the languages it declares.** Each project lists
+its languages in `docs/PROJECT_PROFILE.md` (the *declared languages*): one **template language**
+(usually English, `en`) plus zero or more other languages. A single-language app is allowed, but
+its strings still live in ARB files from day one so adding a language later is a small job.
+
+When an app declares two or more languages, the app starts in the system language when that is
+one of the declared languages and in the template language otherwise, and the user can change the
+language inside the app at any time. Every feature, every screen, and every string — labels,
+menus, buttons, tooltips, dialogs, notifications, errors, empty states, About content — renders in
+the language the user selected.
+
+**Language packs.** Some languages need extra rules (script, grammar, glossary, framework gaps).
+These live in `language_packs/<name>.md` and apply only when the project declares that language.
+Available packs:
+
+| Pack | Languages |
+|---|---|
+| `language_packs/sanskrit_malayalam.md` | Sanskrit (`sa`), Malayalam (`ml`) |
 
 | Sub-section | Rule |
 |---|---|
 | 8.1 | Minimum `MaterialApp` / `l10n.yaml` setup |
 | 8.2 | String externalization into ARB — no user-visible literals |
-| 8.3 | The three mandatory languages, the Sanskrit delegate gap, fonts |
+| 8.3 | Declared languages, framework-translation gaps, fonts |
 | 8.4 | In-app language selection, persistence, resolution order |
-| 8.5 | Sanskrit & Malayalam quality — rules, orthography, standard glossary |
+| 8.5 | Translation quality and language packs |
 | 8.6 | Short UI labels vs. descriptive text |
 | 8.7 | Per-feature language completeness and the parity test |
 | 8.8 | RTL layout support |
@@ -933,29 +1179,28 @@ empty states, About content — renders in the language the user selected.
 
 ### 8.1 Minimum Setup (All Apps)
 
-Every Flutter app MUST declare `flutter_localizations` delegates and `supportedLocales` in the
+Every Flutter app MUST declare the framework localization delegates and `supportedLocales` in the
 root `MaterialApp` or `CupertinoApp`. Without this, some Material widgets (date pickers, number
 inputs, dialog buttons) render incorrectly on devices with non-English system locales.
 
 ```dart
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:material_ui/material_ui.dart';
 
 MaterialApp(
-  localizationsDelegates: const [
-    GlobalMaterialLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
+  // Since Flutter 3.47 GlobalMaterialLocalizations comes from material_ui, and
+  // `.delegates` already includes the Cupertino and Widgets delegates.
+  localizationsDelegates: [
+    AppLocalizations.delegate,
+    ...GlobalMaterialLocalizations.delegates,
   ],
-  supportedLocales: const [
-    Locale('en'), // English — template locale
-    Locale('ml'), // Malayalam
-    Locale('sa'), // Sanskrit (Devanagari)
-  ],
+  // Exactly the declared languages from docs/PROJECT_PROFILE.md, template first.
+  // The generated AppLocalizations.supportedLocales list is the easiest source.
+  supportedLocales: AppLocalizations.supportedLocales,
 );
 ```
 
-The three locales above are **fixed**: every app declares exactly these, in this order. See 8.3 for
-the extra delegate Sanskrit requires and 8.4 for the in-app switcher.
+`supportedLocales` MUST equal the declared languages — no more, no fewer. See 8.3.1 for languages
+that Flutter has no framework translation for, and 8.4 for the in-app switcher.
 
 Add to `pubspec.yaml`:
 
@@ -963,8 +1208,13 @@ Add to `pubspec.yaml`:
 dependencies:
   flutter_localizations:
     sdk: flutter
+  material_ui: ^1.5.0   # Example — Material widgets and GlobalMaterialLocalizations (6.1).
+  cupertino_ui: ^1.1.1  # Example — Cupertino widgets and GlobalCupertinoLocalizations.
   intl: ^0.20.2   # Example — pin the current line at project start and update deliberately.
 ```
+
+`flutter_localizations` is still required: `GlobalWidgetsLocalizations` and the generated
+`AppLocalizations` class still use it. Only the Material and Cupertino delegates moved.
 
 And in `pubspec.yaml` under `flutter:`:
 
@@ -980,7 +1230,7 @@ match the directory layout above:
 ```yaml
 # l10n.yaml — at project root, alongside pubspec.yaml
 arb-dir: lib/l10n
-template-arb-file: app_en.arb
+template-arb-file: app_en.arb   # app_<template language>.arb
 output-localization-file: app_localizations.dart
 output-class: AppLocalizations
 nullable-getter: false
@@ -991,7 +1241,8 @@ synthetic-package: false
 import clarity); leaving the default `true` writes it into the synthetic `flutter_gen` package.
 Pick one and document the choice.
 
-**Android App Bundle language splitting MUST be disabled** in `android/app/build.gradle.kts` (or `build.gradle`):
+**Android App Bundle language splitting MUST be disabled** when the app has an in-app language
+picker (two or more declared languages), in `android/app/build.gradle.kts` (or `build.gradle`):
 
 ```kotlin
 // android/app/build.gradle.kts
@@ -1004,7 +1255,22 @@ android {
 }
 ```
 
-Google Play defaults to language splitting when delivering Android App Bundles (.aab). If a user downloads the app on an English phone, Play only installs English resources. If the user later switches to Malayalam or Sanskrit inside the app, the strings will be missing. Setting `enableSplit = false` ensures that the bundle retains all language resources on the device.
+Google Play defaults to language splitting when delivering Android App Bundles (.aab). If a user
+downloads the app on an English phone, Play only installs English resources. If the user later
+switches to another language inside the app, the platform strings for it are missing. Setting
+`enableSplit = false` keeps all language resources on the device.
+
+**iOS and macOS** list the declared languages in `CFBundleLocalizations` in `ios/Runner/Info.plist`
+and `macos/Runner/Info.plist`, so the App Store shows the right languages and the system language
+reaches Flutter:
+
+```xml
+<key>CFBundleLocalizations</key>
+<array>
+  <string>en</string>
+  <!-- one <string> per declared language -->
+</array>
+```
 
 ### 8.2 String Externalization (Mandatory, All Apps)
 
@@ -1013,17 +1279,18 @@ not wait for a translation request.
 
 ARB files are the Flutter equivalent of Android's `res/values/strings.xml`. On Android we create
 `strings.xml` from day one, so a new language is just a new `values-xx/strings.xml`. We follow the
-same habit in Flutter — with the difference that all three of our languages exist from day one.
+same habit in Flutter.
 
 Required for every app:
 
 - `l10n.yaml` MUST exist at the project root (see 8.1).
-- All three ARB files MUST exist: `lib/l10n/app_en.arb` (template), `lib/l10n/app_ml.arb`,
-  `lib/l10n/app_sa.arb`.
+- One ARB file MUST exist per declared language: `lib/l10n/app_<code>.arb`, with the template
+  language's file as the template.
 - Every user-visible string MUST be defined in the ARB files and read through
   `AppLocalizations.of(context)`. A raw string literal in a widget is not allowed.
-- Every key MUST exist in **all three** files with a real translation. An English value copied into
-  `app_ml.arb` or `app_sa.arb` as a placeholder is an unfinished feature, not a translation (8.7).
+- Every key MUST exist in **every** declared language's file with a real translation. A
+  template-language value copied into another file as a placeholder is an unfinished feature, not
+  a translation (8.7).
 - Every ARB entry MUST have an `@key` description in the template file, so a translator has context.
   Where a key is UI chrome rather than prose, say so in the description (it drives the length budget
   in 8.6), e.g. `"description": "Toolbar button label. Keep to one or two words."`.
@@ -1040,14 +1307,14 @@ Required for every app:
 Anything a real user reads — screen titles, buttons, labels, hints, error text shown on screen,
 empty states, snackbars, dialogs, notification text — goes in the ARB file.
 
-Directory structure:
+Directory structure (example: English template plus two more declared languages):
 
 ```text
 lib/
 `-- l10n/
-    |-- app_en.arb   # REQUIRED — English, the template locale
-    |-- app_ml.arb   # REQUIRED — Malayalam
-    `-- app_sa.arb   # REQUIRED — Sanskrit (Devanagari)
+    |-- app_en.arb   # REQUIRED — template language
+    |-- app_es.arb   # one file per declared language
+    `-- app_hi.arb
 ```
 
 Example ARB file:
@@ -1076,165 +1343,180 @@ flutter gen-l10n
 Use in code via `AppLocalizations.of(context)!.appTitle` (or `AppLocalizations.of(context).appTitle`
 when `nullable-getter: false` is set). Never use raw string literals for user-visible text.
 
-**Adding a fourth language later.** Because the strings are already externalized, this is a small,
+**Adding a language later.** Because the strings are already externalized, this is a small,
 mechanical job:
 
-1. Add `lib/l10n/app_<code>.arb` with the same keys and translated values.
-2. Add `Locale('<code>')` to `supportedLocales` and to the in-app language picker (8.4).
-3. Run `flutter gen-l10n`.
+1. Add the language to the languages row of `docs/PROJECT_PROFILE.md`.
+2. Add `lib/l10n/app_<code>.arb` with the same keys and translated values.
+3. Add it to the in-app language picker (8.4), `CFBundleLocalizations` (8.1), and the parity test
+   list (8.7). If a language pack exists for it, apply the pack.
+4. Run `flutter gen-l10n`.
 
 No screen or widget code changes.
 
-### 8.3 The Three Mandatory Languages
+### 8.3 Declared Languages
+
+The project's languages are recorded once, in `docs/PROJECT_PROFILE.md`, as a table like:
 
 | Locale | Language | Script | Role |
 |---|---|---|---|
 | `en` | English | Latin | Template ARB, ultimate fallback |
-| `ml` | Malayalam | Malayalam | Full UI translation |
-| `sa` | Sanskrit | Devanagari | Full UI translation (see 8.5) |
+| `<code>` | `<language>` | `<script>` | Full UI translation |
 
-All three MUST be listed in `supportedLocales`, all three ARB files MUST be complete, and the
-in-app picker (8.4) MUST offer all three plus "System default".
+All declared languages MUST be listed in `supportedLocales`, all their ARB files MUST be complete,
+and — when there are two or more — the in-app picker (8.4) MUST offer all of them plus
+"System default".
 
-#### 8.3.1 Sanskrit has no Flutter framework translation — install a fallback delegate
+#### 8.3.1 Languages without a Flutter framework translation — install a fallback delegate
 
-`flutter_localizations` ships `GlobalMaterialLocalizations` and `GlobalCupertinoLocalizations` for a
-long list of locales, **but not for `sa`**. Adding `Locale('sa')` to `supportedLocales` without
-handling this throws at runtime the first time a Material widget needs framework strings (date
-picker, dialog buttons, text-selection menu, `Scaffold` semantics labels).
+The framework localizations (`GlobalMaterialLocalizations` from `material_ui`,
+`GlobalCupertinoLocalizations` from `cupertino_ui`, `GlobalWidgetsLocalizations` from
+`flutter_localizations`) cover a long list of locales, **but not every language** (for example,
+Sanskrit `sa` is missing). Adding such a locale to `supportedLocales` without handling this throws
+at runtime the first time a Material widget needs framework strings (date picker, dialog buttons,
+text-selection menu, `Scaffold` semantics labels).
 
-Every app MUST therefore install a delegate that serves framework strings for `sa` from a supported
-locale, while the app's own strings (via `AppLocalizations`) stay Sanskrit. Use English as the
-framework fallback — not Hindi — so no Hindi text can ever leak into a Sanskrit UI.
+For every declared language where `GlobalMaterialLocalizations.delegate.isSupported(locale)` is
+false, the app MUST install a delegate that serves framework strings from the **template
+language**, while the app's own strings (via `AppLocalizations`) stay in the selected language.
+Never fall back to a different "related" language: users would see text in a language they did not
+choose.
 
 ```dart
-// lib/l10n/sa_material_localizations.dart
-//
-// flutter_localizations has no Sanskrit ('sa') translation. This delegate
-// answers for Locale('sa') by loading the English framework strings, so the
-// app's own Sanskrit strings render while Material widgets still work.
-class SaMaterialLocalizationsDelegate
+// lib/l10n/fallback_localizations.dart
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:material_ui/material_ui.dart';
+// Material and Cupertino delegates come from material_ui / cupertino_ui (Flutter ≥ 3.47).
+// Only the widgets-level delegate still lives in flutter_localizations.
+import 'package:flutter_localizations/flutter_localizations.dart'
+    show GlobalWidgetsLocalizations;
+
+/// Declared languages that Flutter has no framework translation for.
+/// Keep in sync with docs/PROJECT_PROFILE.md. Empty set = no fallback needed.
+const Set<String> kFrameworkFallbackLanguages = {/* e.g. 'sa' */};
+
+/// Language that framework strings fall back to (the template language).
+const Locale kFrameworkFallbackLocale = Locale('en');
+
+class FallbackMaterialLocalizationsDelegate
     extends LocalizationsDelegate<MaterialLocalizations> {
-  const SaMaterialLocalizationsDelegate();
+  const FallbackMaterialLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) => locale.languageCode == 'sa';
+  bool isSupported(Locale locale) =>
+      kFrameworkFallbackLanguages.contains(locale.languageCode);
 
   @override
   Future<MaterialLocalizations> load(Locale locale) =>
-      GlobalMaterialLocalizations.delegate.load(const Locale('en'));
+      GlobalMaterialLocalizations.delegate.load(kFrameworkFallbackLocale);
 
   @override
   bool shouldReload(covariant LocalizationsDelegate old) => false;
 }
 
-class SaCupertinoLocalizationsDelegate
+class FallbackCupertinoLocalizationsDelegate
     extends LocalizationsDelegate<CupertinoLocalizations> {
-  const SaCupertinoLocalizationsDelegate();
+  const FallbackCupertinoLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) => locale.languageCode == 'sa';
+  bool isSupported(Locale locale) =>
+      kFrameworkFallbackLanguages.contains(locale.languageCode);
 
   @override
   Future<CupertinoLocalizations> load(Locale locale) =>
-      GlobalCupertinoLocalizations.delegate.load(const Locale('en'));
+      GlobalCupertinoLocalizations.delegate.load(kFrameworkFallbackLocale);
 
   @override
   bool shouldReload(covariant LocalizationsDelegate old) => false;
 }
 
-class SaWidgetsLocalizationsDelegate
+class FallbackWidgetsLocalizationsDelegate
     extends LocalizationsDelegate<WidgetsLocalizations> {
-  const SaWidgetsLocalizationsDelegate();
+  const FallbackWidgetsLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) => locale.languageCode == 'sa';
+  bool isSupported(Locale locale) =>
+      kFrameworkFallbackLanguages.contains(locale.languageCode);
 
   @override
   Future<WidgetsLocalizations> load(Locale locale) =>
-      GlobalWidgetsLocalizations.delegate.load(const Locale('en'));
+      GlobalWidgetsLocalizations.delegate.load(kFrameworkFallbackLocale);
 
   @override
   bool shouldReload(covariant LocalizationsDelegate old) => false;
 }
 ```
 
-Register the Sanskrit delegates **before** the global ones, so they win for `sa`:
+Register the fallback delegates **before** the global ones, so they win for those languages:
 
 ```dart
 MaterialApp(
   localizationsDelegates: const [
     AppLocalizations.delegate,
-    SaMaterialLocalizationsDelegate(),
-    SaCupertinoLocalizationsDelegate(),
-    SaWidgetsLocalizationsDelegate(),
-    GlobalMaterialLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
+    FallbackMaterialLocalizationsDelegate(),
+    FallbackCupertinoLocalizationsDelegate(),
+    FallbackWidgetsLocalizationsDelegate(),
+    ...GlobalMaterialLocalizations.delegates, // Material + Cupertino + Widgets
   ],
-  supportedLocales: const [Locale('en'), Locale('ml'), Locale('sa')],
+  supportedLocales: AppLocalizations.supportedLocales,
 );
 ```
 
-A widget test MUST cover this: pump the app with `locale: Locale('sa')`, open a date picker and a
-dialog, and assert no exception. This is the single most likely Sanskrit runtime failure.
+A widget test MUST cover every fallback language: pump the app with that locale, open a date
+picker and a dialog, and assert no exception.
 
-#### 8.3.2 `intl` formatting under Sanskrit
+#### 8.3.2 `intl` formatting for languages without CLDR data
 
-`intl` has no `sa` date or number symbols, so `DateFormat.yMMMMd('sa')` throws. Format with a
-supported locale while the surrounding UI text stays Sanskrit:
+`intl` has no date or number symbols for some languages, so for example `DateFormat.yMMMMd('sa')`
+throws. Format with a supported locale while the surrounding UI text stays in the selected
+language:
 
 ```dart
-/// Locale to hand to `intl`. Sanskrit has no CLDR data, so dates and numbers
-/// are formatted with English patterns while the UI text stays Sanskrit.
+/// Locale to hand to `intl`. Languages with no CLDR data are formatted with
+/// the template language's patterns while the UI text stays translated.
 String formattingLocale(Locale locale) =>
     DateFormat.localeExists(locale.toLanguageTag())
         ? locale.toLanguageTag()
-        : 'en';
+        : 'en'; // the template language
 ```
 
-Use `formattingLocale(...)` everywhere 8.9 calls for a locale argument. Do not fall back to `hi`.
+Use `formattingLocale(...)` everywhere 8.9 calls for a locale argument.
 
 #### 8.3.3 Fonts and script coverage
 
-Malayalam and Devanagari glyphs are not guaranteed on every Android device or on Windows, and a
-missing glyph renders as a blank box — a silent, ship-blocking bug for two of our three languages.
+Non-Latin scripts (for example Devanagari, Malayalam, Tamil, Thai, Arabic, CJK) are not
+guaranteed on every Android device, on Windows, or on Linux, and a missing glyph renders as a
+blank box — a silent, ship-blocking bug.
 
-- The app MUST either bundle fonts covering both scripts (e.g. Noto Sans Malayalam and Noto Sans
-  Devanagari) or declare an explicit `fontFamilyFallback` chain and verify rendering on a clean
-  device image for each supported platform.
+- For every declared language whose script is not Latin, the app MUST either bundle fonts covering
+  that script (e.g. the matching Noto Sans family) or declare an explicit `fontFamilyFallback`
+  chain and verify rendering on a clean device image for each declared platform.
 - Bundled fonts MUST be subset where possible and recorded under the font-licensing rules (17.4).
-- Verification is per release: open every screen in `ml` and in `sa` on a clean device and confirm
-  no boxes, no clipped ascenders/descenders (Malayalam and Devanagari are taller than Latin), and
-  no overflow. Do not hard-code text container heights (7.4).
+- Verification is per release: open every screen in every declared language on a clean device and
+  confirm no boxes, no clipped ascenders/descenders (many scripts are taller than Latin), and no
+  overflow. Do not hard-code text container heights (7.4).
 
-### 8.4 In-App Language Selection (Mandatory)
+### 8.4 In-App Language Selection (Mandatory When Two Or More Languages)
 
-The language is the user's choice, not the device's alone.
+When an app declares two or more languages, the language is the user's choice, not the device's
+alone. A single-language app skips this sub-section.
 
 **Resolution order** — the app resolves its locale as:
 
 1. the language the user saved inside the app, if any;
-2. otherwise the system locale, when its language code is `en`, `ml` or `sa`;
-3. otherwise English.
+2. otherwise the system locale, when its language code is a declared language;
+3. otherwise the template language.
 
 Rules:
 
 - The choice MUST persist across restarts (`SharedPreferences` key `app_language`, values
-  `system` | `en` | `ml` | `sa`) and MUST be read **before** the first frame, so the app never
+  `system` | `<declared code>`) and MUST be read **before** the first frame, so the app never
   flashes the wrong language at startup (see 4.5).
 - Changing the language MUST apply **immediately and app-wide**, without restarting the app and
   without popping the user back to the home screen.
 - The picker MUST live in Settings, MUST offer **System default** as an explicit first option, and
-  MUST list each language in its own script (its endonym), not translated:
-
-  | Option | Shown as |
-  |---|---|
-  | System default | localized label, e.g. "System default" / "സിസ്റ്റം സ്വതവേ" / "तन्त्रसिद्धम्" |
-  | English | `English` |
-  | Malayalam | `മലയാളം` |
-  | Sanskrit | `संस्कृतम्` |
-
+  MUST list each language in its own script (its endonym), not translated — e.g. `English`,
+  `Español`, `हिन्दी`, `日本語`. Language packs list the exact endonyms for their languages.
 - The current selection MUST be visibly marked (radio / check), and the setting row MUST be
   reachable by screen reader with a label describing the current value.
 - Locale state MUST live in one place (`LocaleController` / a provider), and `MaterialApp.locale`
@@ -1248,7 +1530,11 @@ Reference controller:
 class LocaleController extends ChangeNotifier {
   static const String prefKey = 'app_language';
   static const String systemValue = 'system';
-  static const List<String> supported = ['en', 'ml', 'sa'];
+
+  /// The declared language codes (docs/PROJECT_PROFILE.md), template first.
+  static final List<String> supported = AppLocalizations.supportedLocales
+      .map((l) => l.languageCode)
+      .toList(growable: false);
 
   final SharedPreferences _prefs;
   Locale? _locale;
@@ -1274,405 +1560,68 @@ class LocaleController extends ChangeNotifier {
 ```dart
 MaterialApp(
   locale: localeController.locale, // null => system locale
-  supportedLocales: const [Locale('en'), Locale('ml'), Locale('sa')],
+  supportedLocales: AppLocalizations.supportedLocales,
   localeResolutionCallback: (deviceLocale, supported) {
     for (final l in supported) {
       if (l.languageCode == deviceLocale?.languageCode) return l;
     }
-    return const Locale('en'); // system language is none of the three
+    return supported.first; // the template language
   },
 );
 ```
 
-### 8.5 Sanskrit & Malayalam Quality — Standard UI Glossary
+### 8.5 Translation Quality And Language Packs
 
-Every app ships three languages: English, Malayalam, and Sanskrit (8.3). Both Malayalam and Sanskrit
-demand deliberate linguistic care to avoid common pitfalls: Hindi leakage in Sanskrit due to the
-shared Devanagari script, and awkward English transliterations or calques in Malayalam.
+Translations are product text, not a checkbox.
 
-#### 8.5.1 Sanskrit Quality Rules (Pure Sanskrit, Never Hindi)
+- Every non-template language MUST be reviewed by a fluent reader before its first release, and
+  new or changed strings SHOULD be reviewed before each release. AI or machine translation is a
+  draft, not a final translation.
+- When an AI agent writes a translation it is not confident about, it MUST list that string in the
+  change log as "needs native-reader review".
+- Never substitute a related language or script for a declared language (for example Hindi for
+  Sanskrit, Simplified for Traditional Chinese, Brazilian for European Portuguese when the project
+  declares the other one).
+- Keep terminology consistent: the same English term maps to the same translated term across the
+  app. A project with more than a few screens SHOULD keep a small glossary in
+  `docs/glossary.md`, or use the glossary in a language pack.
+- **Language packs** (`language_packs/*.md`) hold the strict, language-specific rules — grammar,
+  forbidden words, CI gates, glossaries, picker endonyms, store-listing notes. When a project
+  declares a language that has a pack, that pack is **mandatory** for that project.
 
-Sanskrit's derivational system — verbal roots (`धातु`), prefixes (`उपसर्ग`), suffixes
-(`कृत्` / `तद्धित प्रत्यय`), and compounds (`समास`) — can derive a term for any UI concept.
-
-Because Sanskrit and Hindi share the Devanagari script, Hindi text *looks* like Sanskrit to anyone
-who does not read it. Never use Hindi anywhere as a substitute, crutch, or fallback for Sanskrit.
-`app_sa.arb` MUST be authentic, uncompromised Sanskrit.
-
-- **Classical vocabulary and grammar**: Use authentic Sanskrit nominal stems, proper case endings,
-  and correct verbal forms (e.g. polite passive imperative `परिवर्त्यताम्`, not Hindi `बदलें`).
-- **No transliterated English loans**: Never transliterate English words into Devanagari when a
-  standard Sanskrit word exists (`सेटिंग्स` is Hindi/English in Devanagari; use `विन्यासः`).
-- **No Hindi function words or syntax**: Do not use Hindi postpositions (`का`, `की`, `के`, `को`,
-  `में`, `से`, `पर`), copulas (`है`, `हैं`, `था`, `थे`, `थी`, `हूं`), or verb endings (`करें`,
-  `करना`, `रहा`, `गया`, `चाहिए`).
-- **No nukta consonants**: The Perso-Arabic consonants with nukta (`क़`, `ख़`, `ग़`, `ज़`, `ड़`, `ढ़`,
-  `फ़`) do not occur in Sanskrit.
-- **Strict grammatical agreement**: Participles and adjectives must agree with their subject in
-  gender and case. In "No data found", `दत्तांशः` is masculine nominative, so the participle must be
-  `प्राप्तः` and the indefinite pronoun `कोऽपि`: `न कोऽपि दत्तांशः प्राप्तः` (never neuter `न किमपि दत्तांशं प्राप्तम्`).
-- **Valid morphological derivation**:
-  - Do not invent verbs by slapping verbal endings onto nouns. "Copy" is `प्रतिलिख्यताम्` (from verb
-    root `लिख्` with `प्रति`) or `प्रतिलिपिः क्रियताम्`, never pseudo-verb `प्रतिलिप्यताम्`.
-  - The past passive participle for "Copied" is `प्रतिलिखितम्` (or `प्रतिलिपीकृतम्`), never `प्रतिलिपितम्`.
-  - Causative passive of `या` (go) is `निर्याप्यते` / `निर्याप्यताम्` (Export), never `निर्यात्यताम्`.
-  - "Confirm" is `स्थिरीक्रियताम्` or `दृढीक्रियताम्` (let it be made firm), never `संपुष्यताम्` (which means "let it be nourished").
-  - Do not use Hindi loanwords for concepts that have native Sanskrit terms (use `उपयोक्तृविवरणम्` for Account, never Hindi `खाता`; `लेखा` strictly means a line/furrow).
-  - Use `ध्वनिः` for audio/sound to avoid confusion with `शब्दः` (Word).
-- **Form conventions**:
-  - A button or menu item (action commanding the app): polite `-ताम्` imperative (`लोट्`). For a verb
-    that takes an object it is passive (`कर्मणि`), e.g. `रक्ष्यताम्` (Save), `अन्विष्यताम्` (Search); for a
-    verb that takes no object it is impersonal (`भावे`), e.g. `निष्क्रम्यताम्` (Exit).
-  - A title, tab, label, heading, or status: nominal / abstract noun, e.g. `अन्वेषणम्` (Search), `विन्यासः` (Settings).
-  - A confirmation or boolean response: indeclinable, e.g. `आम्` (Yes), `न` (No), `अस्तु` (OK).
-  - Direction words (Back, Next, Previous, More) are nominal or adverbial labels and MAY keep that
-    form on a button, like Yes / No. Close and Exit are actions: on a button they MUST use the
-    imperative (`पिधीयताम्`, `निष्क्रम्यताम्`); the nominal form (`निष्क्रमणम्`) is for titles and labels.
-- **Punctuation**: Use the **daṇḍa** `।` to end a sentence in descriptive prose; UI labels take no terminator.
-- **Locale marker**: Always set `"@@locale": "sa"` at the top of `app_sa.arb`.
-- **Pre-release review**: Machine translation tools commonly output Hindi for Sanskrit requests. All
-  Sanskrit ARB entries MUST be reviewed before release.
-
-**Forbidden markers.** None of these tokens may appear anywhere in `app_sa.arb`, `assets/config/app_config.json`,
-or any `*_sa.*` asset file. They are reliable Hindi giveaways and make a good grep-based gate:
-
-```text
-है  हैं  था  थे  थी  हूं  हो  करें  करना  करके  रहा  रही  रहे  गया  गयी  चाहिए
-नहीं  और  लेकिन  क्या  आपका  आपकी  आपके  हमारा  मेरा  कृपया  सेटिंग्स  ऐप
-◌़ (nukta U+093C, and the precomposed nukta letters U+0958–U+095F)
-```
-
-```bash
-# CI gate: fail the build if any Hindi marker appears in the Sanskrit ARB,
-# app_config.json, or Sanskrit asset files.
-# Uses PCRE (-P) with lookarounds so standalone copulas/words are not confused with
-# legitimate Sanskrit roots (e.g. स्थाप्यताम्, स्थानम्) or indeclinables (यथा, तथा, कथा).
-# Word edges: whitespace, quotes, brackets, punctuation, daṇḍa, XML/HTML tag edges (< >),
-# and Markdown marks (* _ ` # | : ; ~ -) so help files in Markdown are checked too.
-PATTERN='(?<=[\s"'\''([{<>।,*_`#|:;~-]|^)(?:था|थे|थी|हो|है|हैं|हूं|और)(?=[\s"'\''\)\]}<>।,.\?!*_`#|:;~-]|$)|करें|करना|करके|रहा|रही|रहे|गया|गयी|चाहिए|नहीं|लेकिन|क्या|कृपया|सेटिंग्स|ऐप|\x{093C}|[\x{0958}-\x{095F}]'
-
-mapfile -t FILES < <(find . -path '*/build' -prune -o -type f \( \
-    -name 'app_sa.arb' -o \
-    -path '*/assets/*_sa.*' -o \
-    -path '*/assets/config/app_config.json' \) -print)
-
-if [ "${#FILES[@]}" -eq 0 ]; then
-  echo 'No Sanskrit files found — every app ships app_sa.arb.'; exit 1
-fi
-
-# Self-test: the pattern must still catch a Hindi copula in ARB/JSON, XML and Markdown text.
-for sample in '"greeting": "है"' '<b>है</b>' 'यह **है**' 'यह `है`' 'वह *था*'; do
-  if ! printf '%s\n' "$sample" | LC_ALL=C.UTF-8 grep -qP "$PATTERN"; then
-    echo "Sanskrit check self-test failed on: $sample"; exit 1
-  fi
-done
-
-if LC_ALL=C.UTF-8 grep -nP "$PATTERN" "${FILES[@]}"; then
-  echo 'Hindi markers found in Sanskrit text (standard 8.5).'; exit 1
-fi
-exit 0
-```
-
-> The gate is a smoke test, not a proof of correctness: passing it means no obvious Hindi marker is
-> present, not that the Sanskrit is good. Human review still applies.
-> Standalone words (था, थे, थी, हो, है, हैं, हूं, और) match only between word edges: whitespace,
-> quotes, brackets, punctuation (including the daṇḍa `।`), the tag edges `<` and `>`, and the
-> Markdown marks `*`, `_`, `` ` ``, `#`, `|`, `:`, `;`, `~`, `-`. So `यह **है**` in a help file fails
-> the build, while legitimate Sanskrit such as `स्थाप्यताम्`, `स्थानम्`, `पुनःस्थाप्यताम्`, `यथा`,
-> `तथा` and `कथा` never does.
-
-
-#### 8.5.2 Malayalam Quality Rules (Natural Malayalam, Not English Transliterations)
-
-Malayalam UI strings must sound natural and idiomatic to native Malayalam speakers.
-
-- **Avoid lazy English transliterations; established loanwords allowed**: Do not phonetically
-  transliterate English UI jargon into Malayalam script when standard, authentic Malayalam words exist.
-  - Save: `സൂക്ഷിക്കുക` (never bare `സേവ്`).
-  - Print: `അച്ചടിക്കുക` (never `പ്രിന്റ്`).
-  - Vibration: `കമ്പനം` (never `വൈബ്രേഷൻ`).
-  - Optional: `ഐച്ഛികം` (never `ഓപ്ഷണൽ`).
-  - Number: `സംഖ്യ` (never `നമ്പർ`).
-  - Page: `താൾ` (never `പേജ്`).
-  - Widely established digital loanwords (such as `ഹോം`, `മെനു`, `പ്രൊഫൈൽ`, `അക്കൗണ്ട്`, `ഡൗൺലോഡ്`,
-    `ഓഫ്‌ലൈൻ`, `തീം`, `ഫയൽ`, `ഫോൾഡർ`, `ലിങ്ക്`, `ലൈസൻസ്`) are accepted where no single native term
-    carries universal recognition.
-- **Action buttons use verb forms**: Action buttons commanding an operation MUST use the verbal
-  form ending in `-ക്കുക` / `-ക` (`തിരുത്തുക`, `സൂക്ഷിക്കുക`, `നീക്കുക`, `തുറക്കുക`, `പുറത്തുകടക്കുക`,
-  `ലോഗൗട്ട് ചെയ്യുക`), never a bare English noun or uninflected loan.
-- **Accurate negation (`ഇല്ല` vs `അല്ല`)**:
-  - `ഇല്ല` denotes non-existence, absence, or refusal to perform an action. For confirmation dialog
-    action buttons (Yes / No), use **`അതെ` / `ഇല്ല`**.
-  - `അല്ല` denotes negation of identity or qualification ("is not", e.g. `ശരിയല്ല`). Do not put
-    `അല്ല` on a confirmation prompt's "No" button when the dialog asks if an action should be done.
-- **Avoid ungrammatical standalone postpositions**: Postpositions like `കുറിച്ച്` govern an accusative
-  noun (e.g. `ആപ്പിനെക്കുറിച്ച്`); standing alone as a screen title or heading, `കുറിച്ച്` is
-  ungrammatical. Use `ആപ്പിനെക്കുറിച്ച്` for "About"; `വിവരണം` is reserved for Description.
-- **Contextual accuracy over literal calques**:
-  - Preferences: `താൽപ്പര്യങ്ങൾ` or `ഇഷ്ടങ്ങൾ` (matches Sanskrit `रुचयः`). `മുൻഗണനകൾ` strictly means
-    **Priorities** (precedence/rank) and is a misleading false friend.
-  - Apply (theme/filters): `പ്രയോഗിക്കുക` or `നടപ്പിലാക്കുക`. `ബാധകമാക്കുക` means legal liability/enforcement.
-  - Sort: `ക്രമീകരിക്കുക` (arrange in order / sort sequence). `അടുക്കുക` means to stack or draw near.
-- **Modern Unicode orthography**: Always use standard Unicode Malayalam atomic chillu characters (`ൺ`, `ൻ`, `ർ`, `ൽ`, `ൾ`). Avoid legacy ZWJ sequences or non-standard glyphs.
-
-#### 8.5.3 Bad → Good Translations
-
-| English | Bad (Hindi / English loan / Calque) | Good (Sanskrit) | Good (Malayalam) | Linguistic Rationale |
-|---|---|---|---|---|
-| Settings | सेटिंग्स / സെറ്റിംഗ്സ് | विन्यासः | ക്രമീകരണങ്ങൾ | Standard native terminology |
-| Save | सेव करें / സേവ് | रक्ष्यताम् | സൂക്ഷിക്കുക | Polite imperative in SA; `-ക്കുക` verb in ML |
-| Delete | डिलीट करें / ഡിലീറ്റ് | लुप्यताम् / विलुप्यताम् | ഇല്ലാതാക്കുക | Authentic verbal action |
-| Cancel | कैंसिल / ക്യാൻസൽ | निरस्यताम् | റദ്ദാക്കുക | Native rejection/dismissal term |
-| Copy | कॉपी करें / കോപ്പി | प्रतिलिख्यताम् | പകർത്തുക | `प्रति + लिख्` verb in SA; NOT `प्रतिलिप्यताम्` |
-| Export | निर्यात करें / എക്സ്പോർട്ട് | निर्याप्यताम् | കയറ്റുമതി ചെയ്യുക | Correct causative passive of `या` in SA |
-| Search | खोजें / സെർച്ച് | अन्वेषणम् (title) / अन्विष्यताम् (action) | തിരയുക | Distinct noun title vs. action button |
-| No data found | कोई डेटा नहीं मिला / ഡാറ്റ ഇല്ല | न कोऽपि दत्तांशः प्राप्तः | വിവരങ്ങളൊന്നും കണ്ടെത്തിയില്ല | Gender agreement in SA (`दत्तांशः` masculine nom.) |
-| Preferences | प्रेफरेंसेस / മുൻഗണനകൾ | रुचयः | താൽപ്പര്യങ്ങൾ / ഇഷ്ടങ്ങൾ | `മുൻഗണനകൾ` means priorities, not preferences |
-| Confirm | संपुष्यताम् / കൺഫേം | स्थिरीक्रियताम् / दृढीक्रियताम् | സ്ഥിരീകരിക്കുക | `पुष्` means nourish; `स्थिरी` means confirm |
-| Print | प्रिंट करें / പ്രിന്റ് | मुद्र्यताम् | അച്ചടിക്കുക | Standard Malayalam verb |
-| About | ऐप के बारे में / കുറിച്ച് / परिचयः | विषयपरिचयः | ആപ്പിനെക്കുറിച്ച് | `കുറിച്ച്` is a bound postposition, not a title; `विषये` is locative ("regarding"). One term per meaning: `परिचयः` is Profile and `വിവരണം` is Description (8.5.4). |
-
-#### 8.5.4 Standard UI Glossary
-
-Use these exact terms across all apps, in all three languages. When a term you need is missing, add it
-**here**, in this standard, rather than inventing inconsistent per-app variants. All short UI terms
-MUST fit within the 22-character limit defined in Section 8.6.
-
-**Review rule.** A new or changed Malayalam or Sanskrit glossary term MUST be reviewed by a fluent
-reader before any app uses it. The change that adds the term lists it in its change log as
-"needs native-reader review" until that review is done.
-
-##### Navigation and structure
-
-| English | Malayalam | Sanskrit |
-|---|---|---|
-| Home | ഹോം | गृहम् |
-| Back | പിന്നോട്ട് | प्रत्यागमनम् |
-| Next | അടുത്തത് | अग्रिमम् |
-| Previous | മുമ്പത്തേത് | पूर्वम् |
-| Menu | മെനു | सूची |
-| More | കൂടുതൽ | अधिकम् |
-| Close | അടയ്ക്കുക | पिधीयताम् |
-| Exit (button) | പുറത്തുകടക്കുക | निष्क्रम्यताम् |
-| Exit (title, label) | പുറത്തുകടക്കൽ | निष्क्रमणम् |
-| Profile | പ്രൊഫൈൽ | परिचयः |
-| Notifications | അറിയിപ്പുകൾ | सूचनाः |
-| Favorites | പ്രിയപ്പെട്ടവ | प्रियाणि |
-| History | നാൾവഴി | इतिवृत्तम् |
-| Details | വിശദാംശങ്ങൾ | विवरणम् |
-| List | പട്ടിക | आवली |
-| Category | വിഭാഗം | वर्गः |
-| Page | താൾ | पृष्ठम् |
-| Section | ഖണ്ഡം | खण्डः |
-
-##### Actions (buttons, menu items)
-
-| English | Malayalam | Sanskrit |
-|---|---|---|
-| Save | സൂക്ഷിക്കുക | रक्ष्यताम् |
-| Cancel | റദ്ദാക്കുക | निरस्यताम् |
-| Delete | ഇല്ലാതാക്കുക | लुप्यताम् |
-| Edit | തിരുത്തുക | सम्पाद्यताम् |
-| Add | ചേർക്കുക | योज्यताम् |
-| Remove | നീക്കുക | अपनीयताम् |
-| Create | സൃഷ്ടിക്കുക | सृज्यताम् |
-| Update | നവീകരിക്കുക | अद्यतनीक्रियताम् |
-| Copy | പകർത്തുക | प्रतिलिख्यताम् |
-| Paste | ഒട്ടിക്കുക | स्थाप्यताम् |
-| Undo | പഴയപടിയാക്കുക | प्रत्यावर्त्यताम् |
-| Redo | വീണ്ടും ചെയ്യുക | पुनःक्रियताम् |
-| Search | തിരയുക | अन्विष्यताम् |
-| Filter | അരിക്കുക | परिशोध्यताम् |
-| Sort | ക്രമീകരിക്കുക | क्रमीक्रियताम् |
-| Refresh | പുതുക്കുക | नवीक्रियताम् |
-| Share | പങ്കിടുക | वितीर्यताम् |
-| Send | അയയ്ക്കുക | प्रेष्यताम् |
-| Download | ഡൗൺലോഡ് ചെയ്യുക | अवतार्यताम् |
-| Upload | അപ്‌ലോഡ് ചെയ്യുക | आरोप्यताम् |
-| Import | ഇറക്കുമതി ചെയ്യുക | आनीयताम् |
-| Export | കയറ്റുമതി ചെയ്യുക | निर्याप्यताम् |
-| Print | അച്ചടിക്കുക | मुद्र्यताम् |
-| Select | തിരഞ്ഞെടുക്കുക | चीयताम् |
-| Select all | എല്ലാം തിരഞ്ഞെടുക്കുക | सर्वं चीयताम् |
-| Clear | മായ്ക്കുക | रिक्तीक्रियताम् |
-| Reset | പുനഃസജ്ജമാക്കുക | पुनःसज्जीक्रियताम् |
-| Confirm | സ്ഥിരീകരിക്കുക | स्थिरीक्रियताम् |
-| Apply | പ്രയോഗിക്കുക | प्रयुज्यताम् |
-| Open | തുറക്കുക | उद्घाट्यताम् |
-| Start | ആരംഭിക്കുക | आरभ्यताम् |
-| Stop | നിർത്തുക | विरम्यताम् |
-| Pause | നിർത്തിവയ്ക്കുക | स्थग्यताम् |
-| Resume | പുനരാരംഭിക്കുക | पुनरारभ्यताम् |
-| Continue | തുടരുക | अनुवर्त्यताम् |
-| Skip | ഒഴിവാക്കുക | त्यज्यताम् |
-| Retry | വീണ്ടും ശ്രമിക്കുക | पुनः प्रयत्यताम् |
-| Login | പ്രവേശിക്കുക | प्रविश्यताम् |
-| Logout | ലോഗൗട്ട് ചെയ്യുക | निर्गम्यताम् |
-
-##### Settings and preferences
-
-| English | Malayalam | Sanskrit |
-|---|---|---|
-| Settings | ക്രമീകരണങ്ങൾ | विन्यासः |
-| Preferences | താൽപ്പര്യങ്ങൾ | रुचयः |
-| Language | ഭാഷ | भाषा |
-| Theme | തീം | रूपविन्यासः |
-| Dark mode | ഇരുണ്ട രൂപം | श्यामरूपम् |
-| Light mode | തെളിഞ്ഞ രൂപം | दीप्तरूपम् |
-| System default | സിസ്റ്റം സ്വതവേ | तन्त्रसिद्धम् |
-| Font size | അക്ഷരവലുപ്പം | अक्षरपरिमाणम् |
-| Sound | ശബ്ദം | ध्वनिः |
-| Vibration | കമ്പനം | कम्पनम् |
-| Backup | കരുതൽശേഖരം | प्रतिलिपिरक्षणम् |
-| Restore | പുനഃസ്ഥാപിക്കുക | पुनःस्थाप्यताम् |
-| Permissions | അനുമതികൾ | अनुमतयः |
-| Account | അക്കൗണ്ട് | उपयोक्तृविवरणम् |
-| Privacy | സ്വകാര്യത | गोपनीयता |
-| Security | സുരക്ഷ | सुरक्षा |
-| Storage | സംഭരണം | सङ्ग्रहः |
-| Data | വിവരങ്ങൾ | दत्तांशः |
-
-##### Status, feedback, and empty states
-
-| English | Malayalam | Sanskrit |
-|---|---|---|
-| Loading | ലോഡുചെയ്യുന്നു | आपूर्यते |
-| Please wait | കാത്തിരിക്കുക | प्रतीक्ष्यताम् |
-| Success | വിജയം | सफलम् |
-| Failed | പരാജയപ്പെട്ടു | असफलम् |
-| Error | പിശക് | दोषः |
-| Warning | മുന്നറിയിപ്പ് | पूर्वसूचना |
-| Information | വിവരം | सूचना |
-| Done | പൂർത്തിയായി | समाप्तम् |
-| Empty | ശൂന്യം | रिक्तम् |
-| No results | ഫലങ്ങളില്ല | न किमपि प्राप्तम् |
-| Offline | ഓഫ്‌ലൈൻ | असंयुक्तम् |
-| Online | ഓൺലൈൻ | संयुक्तम् |
-| Saved | സൂക്ഷിച്ചു | रक्षितम् |
-| Deleted | ഇല്ലാതാക്കി | लुप्तम् |
-| Copied | പകർത്തി | प्रतिलिखितम् |
-| Updated | നവീകരിച്ചു | अद्यतनीकृतम् |
-| Required | ആവശ്യം | आवश्यकम् |
-| Optional | ഐച്ഛികം | वैकल्पिकम् |
-| Invalid | അസാധു | अमान्यम् |
-
-##### Time and date
-
-| English | Malayalam | Sanskrit |
-|---|---|---|
-| Date | തീയതി | दिनाङ्कः |
-| Time | സമയം | समयः |
-| Today | ഇന്ന് | अद्य |
-| Yesterday | ഇന്നലെ | ह्यः |
-| Tomorrow | നാളെ | श्वः |
-| Now | ഇപ്പോൾ | इदानीम् |
-| Day | ദിവസം | दिनम् |
-| Week | ആഴ്ച | सप्ताहः |
-| Month | മാസം | मासः |
-| Year | വർഷം | वर्षम् |
-| Duration | ദൈർഘ്യം | कालावधिः |
-
-##### Content and fields
-
-| English | Malayalam | Sanskrit |
-|---|---|---|
-| Title | ശീർഷകം | शीर्षकम् |
-| Name | പേര് | नाम |
-| Description | വിവരണം | वर्णनम् |
-| Note | കുറിപ്പ് | टिप्पणी |
-| Text | പാഠം | पाठः |
-| Image | ചിത്രം | चित्रम् |
-| Audio | ഓഡിയോ | श्रव्यम् |
-| Video | വീഡിയോ | दृश्यम् |
-| File | ഫയൽ | सञ्चिका |
-| Folder | ഫോൾഡർ | संपुटम् |
-| Document | രേഖ | लेखः |
-| Link | ലിങ്ക് | अनुबन्धः |
-| Word | വാക്ക് | शब्दः |
-| Line | വരി | पङ्क्तिः |
-| Number | സംഖ്യ | सङ्ख्या |
-| Phone number | ഫോൺ നമ്പർ | दूरभाषसङ्ख्या |
-| Contact / Contacts | വിലാസവിവരം / വിലാസവിവരങ്ങൾ | सम्पर्कः / सम्पर्काः |
-| Call (phone call) | ഫോൺ വിളി | आह्वानम् |
-| Tag / Tags | അടയാളം / അടയാളങ്ങൾ | चिह्नम् / चिह्नानि |
-| Total | ആകെ | योगः |
-| Count | എണ്ണം | गणना |
-| Size | വലുപ്പം | परिमाणम् |
-| Type | തരം | प्रकारः |
-| Status | നില | स्थितिः |
-
-> **Phone number vs. Number.** A telephone number is `ഫോൺ നമ്പർ` in Malayalam; `സംഖ്യ` reads as
-> "numeral" and stays the word for a plain number. Contact and Tag list the singular and plural
-> forms because apps need both ("1 contact", "all contacts").
-
-##### Confirmation words
-
-| English | Malayalam | Sanskrit |
-|---|---|---|
-| Yes | അതെ | आम् |
-| No | ഇല്ല | न |
-| OK | ശരി | अस्तु |
-| Are you sure? | ഉറപ്പാണോ? | निश्चयेन वा? |
-
-##### About screen (matches the `aboutDetail<Key>` ARB keys in `guideline.md` §1.6)
-
-| English | Malayalam | Sanskrit |
-|---|---|---|
-| About | ആപ്പിനെക്കുറിച്ച് | विषयपरिचयः |
-| Version | പതിപ്പ് | संस्करणम् |
-| Build | നിർമ്മിതി | निर्मितिसङ्ख्या |
-| Author | രചയിതാവ് | लेखकः |
-| Email | ഇമെയിൽ | विद्युत्पत्रम् |
-| License | ലൈസൻസ് | अनुज्ञापत्रम् |
-| AI used | ഉപയോഗിച്ച AI | प्रयुक्ता कृत्रिमबुद्धिः |
-| IDE used | ഉപയോഗിച്ച IDE | प्रयुक्तं विकाससाधनम् |
-| Help | സഹായം | साहाय्यम् |
-| Feedback | പ്രതികരണം | प्रतिक्रिया |
-| Contact | ബന്ധപ്പെടുക | सम्पर्कः |
-| Terms | നിബന്ധനകൾ | नियमाः |
-| Privacy policy | സ്വകാര്യതാ നയം | गोपनीयतानीतिः |
-
-> About-screen row labels use the `aboutDetail<Key>` pattern (`guideline.md` §1.6), which is exempt
-> from the 8.6 budget, so a long row label may wrap to two lines. Do not copy that liberty into a
-> toolbar or a tab.
+To add a new language pack, copy the structure of `language_packs/sanskrit_malayalam.md`
+(framework gaps → fonts → picker labels → quality rules and glossary → label budget → store
+listings → checklist) and list it in the table at the top of section 8.
 
 ### 8.6 Label Conciseness (Short UI Text vs. Descriptive Text)
 
-UI chrome MUST be short in **all three** languages. A long Malayalam or Sanskrit word wrapping onto
-two lines in a toolbar, tab, or bottom-navigation item is a layout bug, and Malayalam and Sanskrit
-compounds grow fast if written carelessly.
+UI chrome MUST be short in **every** declared language. A long translated word wrapping onto two
+lines in a toolbar, tab, or bottom-navigation item is a layout bug.
 
 **Budget for short text** — menu items, buttons, tabs, chips, navigation destinations, tooltips,
 app-bar titles, list-row labels, form-field labels, switch/checkbox labels, dialog action buttons:
 
 | Language | Target | Hard limit |
 |---|---|---|
-| English | 1–2 words | 20 characters |
-| Malayalam | 1–2 words | 22 characters |
-| Sanskrit | 1 word (nominal form preferred) | 22 characters |
+| English (and other Latin-script languages) | 1–2 words | 20 characters |
+| Any other declared language | 1–2 words | 22 characters, unless its language pack sets another limit |
+| CJK languages | 1 word | 10 characters |
 
 **How characters are counted.** A character is a visible character (a grapheme cluster), not a
 code unit: a vowel sign or virama belongs to the letter before it. Count using Dart's
 `characters.length` (`package:characters`, which is bundled with Flutter): `string.characters.length`.
-Every term in the 8.5.4 glossary fits within the budget.
 
 Rules:
 
 - Prefer a single word. Drop articles and filler: "Delete" not "Delete this item".
-- In Sanskrit follow the form convention in 8.5: a nominal form for titles, tabs and labels
-  (`अन्वेषणम्`), a single-word polite imperative for buttons (`अन्विष्यताम्`). Never a multi-word
-  verb phrase.
-- In Malayalam prefer the common everyday word over a Sanskritized formal one, unless the app's
-  subject matter calls for the formal register.
 - Do not solve a long translation by shrinking the font, truncating, or adding an ellipsis —
   choose a shorter word.
-- Sentence case in English (`Add note`), not Title Case, and never ALL CAPS in Malayalam or
-  Sanskrit.
+- Sentence case in English (`Add note`), not Title Case. Follow each language's own casing rules.
 
-**Descriptive text is exempt** from the budget — and MUST still be complete, natural prose in all
-three languages: onboarding copy, empty-state explanations, help text, About `description`, error
-explanations, confirmation dialog bodies, notification bodies, tutorial content. About-screen row labels
-(`aboutDetail<Key>`) are also exempt from this budget so they can wrap to two lines.
+**Descriptive text is exempt** from the budget — and MUST still be complete, natural prose in every
+declared language: onboarding copy, empty-state explanations, help text, About `description`,
+error explanations, confirmation dialog bodies, notification bodies, tutorial content. About-screen
+row labels (`aboutDetail<Key>`) are also exempt from this budget so they can wrap to two lines.
 
 **ARB key naming makes the category checkable.** Prefix every key so the budget can be enforced
 mechanically:
@@ -1689,28 +1638,30 @@ mechanically:
 ```dart
 // test/l10n/label_length_test.dart — fails when a short key exceeds its budget.
 const shortPrefixes = ['action', 'label', 'title', 'tab', 'nav', 'tooltip'];
-const limits = {'en': 20, 'ml': 22, 'sa': 22};
+// One entry per declared language; values from the table above or the language pack.
+const limits = {'en': 20 /*, '<code>': 22 */};
 // For each ARB file: for each key starting with a short prefix,
 // expect(value.characters.length, lessThanOrEqualTo(limits[locale]!));
 ```
 
 ### 8.7 Per-Feature Language Completeness
 
-A feature is **not done** until it works fully in English, Malayalam and Sanskrit.
+A feature is **not done** until it works fully in every declared language.
 
-- No feature may ship with strings in `app_en.arb` only. Adding a key to the template without
-  adding it to `app_ml.arb` and `app_sa.arb` MUST fail CI.
-- No feature may render English text under `ml` or `sa` — including snackbars, validation messages,
-  notification text, share sheets, exported file headers a user sees, and the About screen.
+- No feature may ship with strings in the template ARB only. Adding a key to the template without
+  adding it to every other declared language's ARB MUST fail CI.
+- No feature may render template-language text under another declared language — including
+  snackbars, validation messages, notification text, share sheets, exported file headers a user
+  sees, and the About screen.
 - Feature-level content shipped as an asset (JSON, Markdown help pages, seed data a user reads)
-  MUST also carry all three languages, or the screen that shows it MUST resolve a per-language
-  asset (`assets/content/help_<lang>.md`). `app_config.json` prose fields (`appName`, `description`,
-  `details`) must provide all three `{"en","ml","sa"}` entries.
-- Screenshots for a release are taken in all three languages when the feature changes layout.
-- Widget tests for a screen MUST run in all three locales (pump with `locale: Locale('ml')` and
-  `Locale('sa')`), asserting no overflow and no untranslated English leaking through.
+  MUST also carry every declared language, or the screen that shows it MUST resolve a per-language
+  asset (`assets/content/help_<lang>.md`). `app_config.json` prose fields (`appName`,
+  `description`, `details`) MUST provide an entry for every declared language.
+- Screenshots for a release are taken in every declared language when the feature changes layout.
+- Widget tests for a screen MUST run in every declared locale, asserting no overflow and no
+  untranslated template text leaking through.
 
-**Translation parity test** — required in every app:
+**Translation parity test** — required in every app with two or more declared languages:
 
 ```dart
 // test/l10n/translation_parity_test.dart
@@ -1718,43 +1669,44 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
-void main() {
-  const locales = ['ml', 'sa'];
+/// The template language and the other declared languages (docs/PROJECT_PROFILE.md).
+const template = 'en';
+const locales = <String>[/* e.g. 'es', 'hi' */];
 
-  /// Strings allowed to match English: brand names and symbols. Keep this list short.
-  const sameAsEnglishAllowed = <String>{};
+void main() {
+  /// Strings allowed to match the template: brand names and symbols. Keep this list short.
+  const sameAsTemplateAllowed = <String>{};
 
   group('ARB parity tests', () {
     test('every ARB file has the same keys as the template', () {
-      final en = _keys('lib/l10n/app_en.arb');
+      final base = _keys('lib/l10n/app_$template.arb');
       for (final locale in locales) {
         final other = _keys('lib/l10n/app_$locale.arb');
-        expect(other.difference(en), isEmpty, reason: 'extra keys in $locale');
-        expect(en.difference(other), isEmpty, reason: 'missing keys in $locale');
+        expect(other.difference(base), isEmpty, reason: 'extra keys in $locale');
+        expect(base.difference(other), isEmpty, reason: 'missing keys in $locale');
       }
     });
 
-    test('no translation is a copy of the English value', () {
-      final enStrings = _strings('lib/l10n/app_en.arb');
+    test('no translation is a copy of the template value', () {
+      final baseStrings = _strings('lib/l10n/app_$template.arb');
       final problems = <String>[];
       for (final locale in locales) {
         final other = _strings('lib/l10n/app_$locale.arb');
         for (final entry in other.entries) {
           final key = entry.key;
           final value = entry.value;
-          if (sameAsEnglishAllowed.contains(key)) continue;
-          if (value == enStrings[key] && value.trim().isNotEmpty) {
-            problems.add('lib/l10n/app_$locale.arb: $key is untranslated (matches English)');
+          if (sameAsTemplateAllowed.contains(key)) continue;
+          if (value == baseStrings[key] && value.trim().isNotEmpty) {
+            problems.add('lib/l10n/app_$locale.arb: $key is untranslated (matches template)');
           }
         }
       }
       expect(problems, isEmpty, reason: problems.join('\n'));
     });
 
-    test('aboutMadeWithLove keeps the {heart} marker in all three languages', () {
-      for (final locale in ['en', ...locales]) {
-        final strings = _strings('lib/l10n/app_$locale.arb');
-        final text = strings['madeWithLove'] ?? strings['aboutMadeWithLove'];
+    test('the optional About badge keeps its {heart} marker in every language', () {
+      for (final locale in [template, ...locales]) {
+        final text = _strings('lib/l10n/app_$locale.arb')['madeWithLove'];
         if (text != null) {
           expect(text.contains('{heart}'), isTrue,
               reason: 'app_$locale.arb madeWithLove is missing the {heart} marker');
@@ -1764,17 +1716,17 @@ void main() {
   });
 
   group('About JSON config parity tests', () {
-    test('app_config.json has all three languages and valid detail labels', () {
+    test('app_config.json has every declared language and valid detail labels', () {
       final file = File('assets/config/app_config.json');
-      if (!file.existsSync()) return; // Pattern B app (no assets config)
+      if (!file.existsSync()) return;
 
       final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      final enKeys = _keys('lib/l10n/app_en.arb');
+      final templateKeys = _keys('lib/l10n/app_$template.arb');
       final problems = <String>[];
 
       void checkLanguages(String path, dynamic value) {
         if (value is Map<String, dynamic>) {
-          for (final lang in ['en', 'ml', 'sa']) {
+          for (final lang in [template, ...locales]) {
             final text = value[lang]?.toString().trim() ?? '';
             if (text.isEmpty) {
               problems.add('$path.$lang is missing or empty');
@@ -1794,7 +1746,7 @@ void main() {
 
           // Details key is lowerCamelCase; label in ARB is aboutDetail<Key>
           final labelKey = 'aboutDetail${id[0].toUpperCase()}${id.substring(1)}';
-          if (!enKeys.contains(labelKey)) {
+          if (!templateKeys.contains(labelKey)) {
             problems.add('details.$id has no corresponding ARB key "$labelKey"');
           }
         }
@@ -1805,24 +1757,24 @@ void main() {
   });
 
   group('Content asset parity tests', () {
-    test('content and help assets exist in all three languages', () {
+    test('content and help assets exist in every declared language', () {
       final assetsDir = Directory('assets');
       if (!assetsDir.existsSync()) return;
 
       final problems = <String>[];
-      final enFiles = assetsDir
+      final templateFiles = assetsDir
           .listSync(recursive: true)
           .whereType<File>()
-          .where((f) => RegExp(r'_en\.[^.]+$').hasMatch(f.path));
+          .where((f) => RegExp('_$template\\.[^.]+\$').hasMatch(f.path));
 
-      for (final enFile in enFiles) {
+      for (final baseFile in templateFiles) {
         for (final lang in locales) {
-          final twinPath = enFile.path.replaceAllMapped(
-            RegExp(r'_en(\.[^.]+)$'),
+          final twinPath = baseFile.path.replaceAllMapped(
+            RegExp('_$template(\\.[^.]+)\$'),
             (match) => '_$lang${match[1]}',
           );
           if (!File(twinPath).existsSync()) {
-            problems.add('Missing localized asset: $twinPath (matching ${enFile.path})');
+            problems.add('Missing localized asset: $twinPath (matching ${baseFile.path})');
           }
         }
       }
@@ -1851,19 +1803,21 @@ Map<String, String> _strings(String path) {
 
 - Never use `left` and `right` for padding, alignment, or positioning of UI elements. Use `start`
   and `end` equivalents: `EdgeInsetsDirectional`, `AlignmentDirectional`, `MainAxisAlignment.start`.
-- Use `Directionality` widget tests to verify layouts do not break in RTL mode.
 - Icons that carry directional meaning (back arrow, forward arrow) MUST be mirrored in RTL.
   Use `Directionality.of(context)` or set `textDirection` in `Icon` semantics.
-- None of our three shipped languages is RTL, so these rules are about staying ready rather than a
-  current feature. Test RTL by wrapping a screen in `Directionality(textDirection: TextDirection.rtl)`
-  in a widget test — do **not** add Arabic or Hebrew to `supportedLocales`, which is fixed at
-  `en`, `ml`, `sa` (8.3).
+- **If any declared language is RTL** (Arabic `ar`, Hebrew `he`, Persian `fa`, Urdu `ur`, …), every
+  screen MUST be checked in that language, and widget tests MUST run under it.
+- **If no declared language is RTL**, these rules are about staying ready: test RTL by wrapping a
+  screen in `Directionality(textDirection: TextDirection.rtl)` in a widget test. Do **not** add an
+  RTL language to `supportedLocales` just to test; `supportedLocales` equals the declared languages
+  (8.3).
 
 ### 8.9 Locale-Sensitive Formatting
 
 Use the `intl` package for all locale-sensitive formatting. Never use `toString()` on dates,
 numbers, or currencies in user-visible strings. Pass `formattingLocale(...)` from 8.3.2 as the
-`locale` argument, so Sanskrit falls back to English CLDR data instead of throwing.
+`locale` argument, so languages without CLDR data fall back to the template language instead of
+throwing.
 
 ```dart
 import 'package:intl/intl.dart';
@@ -1971,9 +1925,11 @@ class AppLifecycleService with WidgetsBindingObserver {
 ### 10.0 Rendering Engine: Impeller
 
 Impeller is the default Flutter rendering engine on **iOS** (no Skia opt-out as of Flutter
-3.38) and on **Android API 29+** (since Flutter 3.27). On older Android devices and devices
-without Vulkan, Flutter falls back to the legacy OpenGL renderer automatically; no app code
-changes are required.
+3.38), on **Android API 29+** (since Flutter 3.27), and on **desktop — macOS, Windows and
+Linux** (since Flutter 3.47, with the Skia fallback options being removed). On older Android
+devices and devices without Vulkan, Flutter falls back to the legacy OpenGL renderer
+automatically; no app code changes are required. Windows apps MUST be smoke-tested on
+Impeller after the 3.47 upgrade.
 
 What this means in practice for an app team:
 
@@ -2114,9 +2070,13 @@ Under `Production App Extension`:
 |----------|--------|------------|
 | Android APK (arm64) | Under 30 MB | 50 MB |
 | Android AAB download size | Under 20 MB | 40 MB |
+| iOS App Store download size | Under 40 MB | 80 MB |
 | Windows MSIX | Under 80 MB | 150 MB |
+| macOS `.app` / DMG | Under 80 MB | 150 MB |
+| Linux bundle / package | Under 80 MB | 150 MB |
 
-Exceeding the hard limit requires a documented justification in the release checklist.
+These are starting budgets only for the platforms the project declares; a project MAY set its own
+in `docs/PROJECT_PROFILE.md`. Exceeding the hard limit requires a documented justification in the release checklist.
 
 Track size in CI using `--analyze-size` output. Record the baseline at project start and
 diff on each release.
@@ -2274,8 +2234,8 @@ dart run build_runner watch --delete-conflicting-outputs
 Always use `--delete-conflicting-outputs`. Without it, stale generated files from a previous run
 cause confusing type errors.
 
-Add to `pubspec.yaml` under `dev_dependencies` (versions as of Flutter 3.41 / early 2026 —
-pin to the current major at project start and update deliberately):
+Add to `pubspec.yaml` under `dev_dependencies` (example versions only — check `pub.dev`,
+pin to the current major at project start, and update deliberately):
 
 ```yaml
 dev_dependencies:
@@ -2665,8 +2625,8 @@ Under `Sensitive Data Extension`:
 - Run `dart format .` before commit.
 - New work MUST NOT introduce analyzer issues.
 - Repositories SHOULD aim for zero analyzer warnings overall.
-- Start from `package:flutter_lints/flutter.yaml` (pin `flutter_lints: ^5.0.0` or the
-  current major as of project start in `dev_dependencies`) and add stricter rules
+- Start from `package:flutter_lints/flutter.yaml` (pin the current major as of
+  project start in `dev_dependencies` — `^6.0.0` at the time of writing) and add stricter rules
   deliberately. Pinning the major prevents the lint set silently shifting under your CI
   when a contributor upgrades dependencies.
 
@@ -2846,11 +2806,47 @@ activates automatically in release builds when icons are referenced via `const` 
   configuration violates offline requirements; verify the configuration in your app's startup
   before relying on `google_fonts`.
 - Document font sources and licenses in `docs/architecture.md` or a `LICENSES` file.
-- **Script coverage is part of licensing work.** Because every app ships Malayalam and Sanskrit
-  (section 8.3.3), the chosen font stack MUST cover the Malayalam and Devanagari blocks, or the
-  app MUST bundle fonts that do (Noto Sans Malayalam and Noto Sans Devanagari are OFL). Runtime
-  fetching is not acceptable for these — a device offline on first launch would render boxes for
-  two of the three languages.
+- **Script coverage is part of licensing work.** The chosen font stack MUST cover the script of
+  every declared language (section 8.3.3), or the app MUST bundle fonts that do (the Noto
+  families are OFL). Runtime fetching is not acceptable for these — a device offline on first
+  launch would render boxes instead of text.
+
+### 17.5 App Icons And Splash Screens
+
+Every declared platform needs its own correctly sized app icon; a missing or default Flutter icon
+is a common store rejection.
+
+- Keep one high-resolution source icon in the repo (at least 1024×1024 PNG, no transparency for
+  iOS) under `assets/icons/`.
+- Generate platform icons with a tool such as `flutter_launcher_icons` rather than by hand, and
+  commit the generated files. Configure every declared platform:
+
+  ```yaml
+  # pubspec.yaml (dev_dependencies: flutter_launcher_icons) — example, check current options
+  flutter_launcher_icons:
+    image_path: assets/icons/app_icon.png
+    android: true
+    adaptive_icon_background: "#FFFFFF"
+    adaptive_icon_foreground: assets/icons/app_icon_foreground.png
+    ios: true
+    remove_alpha_ios: true
+    windows: { generate: true, image_path: assets/icons/app_icon.png }
+    macos: { generate: true, image_path: assets/icons/app_icon.png }
+  ```
+
+  ```bash
+  dart run flutter_launcher_icons
+  ```
+
+- **Android** MUST ship an adaptive icon (foreground + background layers) and SHOULD ship a
+  monochrome layer for themed icons.
+- **Linux** icons are installed by the package (Snap / Flatpak / `.deb`) under the
+  `APPLICATION_ID` name (5.5.3); the tool above does not cover Linux.
+- **Splash screen**: use the native launch screen (Android 12+ `SplashScreen` API, iOS
+  `LaunchScreen.storyboard`), for example via `flutter_native_splash`. Keep it to the logo on a
+  plain background — no text that would need translating.
+- Flavor builds SHOULD use a visibly different icon (e.g. a "DEV" badge) so testers never confuse
+  them with production.
 
 ---
 
@@ -2905,12 +2901,12 @@ Under `Production App Extension`:
 
 - Capture and store performance baseline results. Treat regressions beyond 20% as blocking.
 
-### 18.5 Widget Previewer (Flutter ≥ 3.35, Experimental)
+### 18.5 Widget Previews (Flutter ≥ 3.35, Stable Since 3.47)
 
-The Flutter Widget Previewer renders annotated widgets in a dedicated VS Code or Android
+Flutter Widget Previews render annotated widgets in a dedicated VS Code or Android
 Studio panel without launching the full app. It is faster feedback than running widget
-tests for visual iteration, but it is **experimental** as of Flutter 3.41 and is not a
-substitute for widget tests, golden tests, or integration tests.
+tests for visual iteration. The feature is **stable** since Flutter 3.47, but it is still not
+a substitute for widget tests, golden tests, or integration tests.
 
 ```dart
 import 'package:flutter/widgets.dart';
@@ -2924,7 +2920,7 @@ Widget previewEmptyStateDark() => const TodoEmptyState(theme: AppTheme.dark);
 
 Rules:
 - Treat previews as a **development convenience**, not as a checked-in test artifact. Do
-  not gate CI on previewer behavior while the feature is experimental.
+  not gate CI on previewer behavior.
 - Cover the same widget with widget tests for behavior assertions and (optionally) golden
   tests for pixel-level regressions.
 - Remove orphaned `@Preview` annotations during refactors so the previewer panel stays
@@ -2952,18 +2948,76 @@ steps:
 
 ### 19.2 Production App Extension
 
-For shipped apps:
+For shipped apps, CI MUST build a release artifact for **every declared platform**. Each platform
+needs a matching runner OS:
+
+| Platform | Runner | Why |
+|---|---|---|
+| Android | Linux (or any) | Fastest; needs Java 17+ |
+| Linux | Linux | Needs GTK dev packages (5.5.3); use the oldest supported distro |
+| Windows | Windows | Windows builds only run on Windows |
+| iOS, macOS | macOS | Xcode only runs on macOS |
+
+Example (GitHub Actions — keep only the jobs for declared platforms):
 
 ```yaml
-  - run: flutter test --coverage
-  - run: flutter build apk --flavor dev --debug
-  - run: flutter build apk --flavor prod --release
-      --obfuscate
-      --split-debug-info=build/symbols/android-prod-${{ env.APP_VERSION }}/
-  - run: flutter build appbundle --flavor prod --release
-      --obfuscate
-      --split-debug-info=build/symbols/android-prod-${{ env.APP_VERSION }}/
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter pub get
+      - run: flutter test --coverage
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      # checkout + flutter setup + Java 17 setup
+      - run: flutter build appbundle --flavor prod --release
+          --obfuscate
+          --split-debug-info=build/symbols/android-prod-${{ env.APP_VERSION }}/
+
+  ios:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      # checkout + flutter setup; unsigned check build in CI, signed build on release
+      - run: flutter build ios --release --no-codesign
+          --obfuscate
+          --split-debug-info=build/symbols/ios-prod-${{ env.APP_VERSION }}/
+
+  macos:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - run: flutter build macos --release --dart-define=APP_FLAVOR=prod
+          --obfuscate
+          --split-debug-info=build/symbols/macos-prod-${{ env.APP_VERSION }}/
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - run: flutter build windows --release --dart-define=APP_FLAVOR=prod
+          --obfuscate
+          --split-debug-info=build/symbols/windows-prod-${{ env.APP_VERSION }}/
+
+  linux:
+    needs: test
+    runs-on: ubuntu-22.04   # oldest distro you support
+    steps:
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+      - run: flutter build linux --release --dart-define=APP_FLAVOR=prod
+          --obfuscate
+          --split-debug-info=build/symbols/linux-prod-${{ env.APP_VERSION }}/
 ```
+
+Signing material (keystore, Apple certificates and profiles, Windows code-signing certificate,
+store API keys) is provided to CI only as **encrypted CI secrets**, decoded at build time, and
+never written to the repository or to logs.
 
 The `<platform>-<version>/` subdirectory is required so that symbols from different releases
 do not collide; `release_process.md §6.1` and `security.md §8.1` both depend on this layout.
@@ -3028,6 +3082,21 @@ build/
 *.aab
 *.ipa
 *.msix
+*.msixbundle
+*.dmg
+*.pkg
+*.snap
+*.AppImage
+*.deb
+*.rpm
+*.flatpak
+
+# Signing material (see guideline.md §2 and platform_store_readiness.md)
+*.p12
+*.pfx
+*.p8
+*.mobileprovision
+*.provisionprofile
 
 # Debug symbols
 *.symbols/
@@ -3059,8 +3128,10 @@ build/
 | `AGENTS.md` | Mandatory project-root AI agent instructions following `AGENTS_MD_GUIDELINE.md` (MUST) |
 | `README.md` | Setup, run, test, and build instructions |
 | `docs/GUIDELINES_MANIFEST.md` | Portable pointer manifest indexing shared Flutter guidelines |
+| `docs/PROJECT_PROFILE.md` | Platforms, stores, languages, identity and About options (1.2.1) |
 | `docs/architecture.md` | Module boundaries, initialization sequence, schema version, major decisions |
 | `docs/release_process.md` | Required for shipped apps |
+| `PRIVACY.md` or hosted privacy policy | Required for any app on a public store (`platform_store_readiness.md`) |
 | `plans/` | One plan per change — MUST follow the privacy rule in 21.1.1 |
 | `change_log/` | One log per change — MUST follow the privacy rule in 21.1.1 |
 
@@ -3093,7 +3164,8 @@ Write them as if a stranger will read them. Nothing should reveal the machine th
 
 ### 21.3 README Must Include
 
-- Prerequisites (Flutter version, Dart version, platform SDK versions).
+- Prerequisites (Flutter version, Dart version, platform SDK versions, and the build machine each
+  declared platform needs — e.g. macOS + Xcode for iOS/macOS, GTK packages for Linux).
 - Setup steps from a clean clone to a running app.
 - How to run tests.
 - How to run code generation (`build_runner`).
@@ -3113,7 +3185,11 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Read the existing code before modifying it.
 - Identify whether the repo is Tier 1 or Tier 2 and follow the existing structure.
 - Identify the existing state-management pattern and follow it.
-- Identify which applicability profile is in force for the repository.
+- Read `docs/PROJECT_PROFILE.md`: applicability profiles, target platforms, distribution
+  channels, declared languages, language packs, About options. If it is missing, create it from
+  `PROJECT_PROFILE_TEMPLATE.md` and ask the user to confirm the open choices before building
+  features. Never guess platforms, stores, languages, author or package id.
+- Read every language pack that applies to a declared language.
 - Check the current database schema version before writing any migration.
 - Check whether the repository commits or excludes generated files before creating new models.
 - Write a plan to `plans/` and obtain explicit user approval before modifying project files.
@@ -3127,11 +3203,13 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Apply the security profile in force; never log secrets or weaken cryptographic behavior.
 - Ensure all `plans/` and `change_log/` entries follow the privacy rule in 21.1.1: **relative repository paths only**, **no local system details** (OS user name, computer/host name, home or drive-letter paths, network shares, LAN/internal IPs, local server URLs with ports, device serial numbers, personal email addresses), and **no secrets** (API keys, tokens, passwords, keystore passphrases, credentials, PII).
 - Put all user-visible strings in `lib/l10n/*.arb` and read them through `AppLocalizations` (section 8.2) — never a raw string literal in a widget.
-- Add every new key to **all three** ARB files — `app_en.arb`, `app_ml.arb`, `app_sa.arb` — with a real translation in each (sections 8.2, 8.7). Never leave the English value as a placeholder in the Malayalam or Sanskrit file.
-- Never use Hindi anywhere as a substitute or crutch for Sanskrit: Sanskrit is fully generative and possesses all roots, affixes, and compounding formulas to create any technical or future terminology. Follow the rules, the forbidden-marker gate, and the glossary in 8.5. Flag any Sanskrit string you are not confident about in the change log so a Sanskrit reader can review it.
+- Add every new key to the ARB file of **every declared language**, with a real translation in each (sections 8.2, 8.7). Never leave the template-language value as a placeholder in another language's file.
+- Follow every language pack that applies (section 8.5). Never substitute a related language for a declared one. Flag any translation you are not confident about in the change log as "needs native-reader review".
 - Keep `action…`, `label…`, `title…`, `tab…`, `nav…` and `tooltip…` strings within the length budget in 8.6; only `desc…`/`help…`/`empty…`/`error…`/`body…` keys may be long.
 - Give every icon-only control a localized `tooltip:` (section 7.8).
-- Keep the About screen data-driven and localized, and never remove the "Made with ❤️ from India" badge (`guideline.md` §1.6–§1.7).
+- Keep the About screen data-driven and localized (`guideline.md` §1.6). If the project profile enables the signature badge, never remove or reword it (`guideline.md` §1.7).
+- Only touch platform folders (`android/`, `ios/`, `windows/`, `macos/`, `linux/`, `web/`) for declared platforms. When adding a feature that needs a permission, entitlement, or capability, add it on **every** declared platform (Android manifest permission, iOS/macOS `Info.plist` usage string and entitlement, MSIX capability, Snap plug / Flatpak permission) — and nowhere it is not needed.
+- Never hard-code personal data (author name, email, company) in Dart code; it comes from `docs/PROJECT_PROFILE.md` and `assets/config/app_config.json`.
 - Do not use `kDebugMode` or `kReleaseMode` as a substitute for application flavor when the
   project has explicit environments.
 - Always add `const` to constructors and widget instantiations where possible.
@@ -3167,17 +3245,19 @@ A task is complete only when all applicable items are true.
 - `dart format .` produces no required follow-up changes.
 - No secrets, build output, or local machine files were added to git.
 - All `plans/` and `change_log/` files use relative repository paths only and contain zero local system details and zero sensitive data — safe to publish on the internet (section 21.1.1).
-- `l10n.yaml` and all three ARB files (`app_en.arb`, `app_ml.arb`, `app_sa.arb`) exist, and every
-  user-visible string added or changed by this task comes from `AppLocalizations` (section 8.2).
-- Every ARB key added or changed by this task exists and is genuinely translated in all three
-  files; the parity test passes (section 8.7).
-- Sanskrit strings pass the Hindi-marker gate and follow the glossary (section 8.5).
-- Short-label keys are within the length budget for all three languages (section 8.6).
+- `l10n.yaml` and one ARB file per declared language exist, and every user-visible string added or
+  changed by this task comes from `AppLocalizations` (section 8.2).
+- Every ARB key added or changed by this task exists and is genuinely translated in every declared
+  language; the parity test passes (section 8.7).
+- Every applicable language pack's rules and gates pass (section 8.5).
+- Short-label keys are within the length budget for every declared language (section 8.6).
 - Every icon-only control added or changed has a localized tooltip (section 7.8).
-- The screen was checked in all three languages — no English leaking through, no overflow, no
-  missing glyphs (sections 8.3.3, 8.7).
-- The About screen still ends with the "Made with ❤️ from India" badge if this task touched About
-  (`guideline.md` §1.7).
+- The screen was checked in every declared language — no template text leaking through, no
+  overflow, no missing glyphs (sections 8.3.3, 8.7).
+- If the project profile enables the About signature badge, the About screen still ends with it
+  when this task touched About (`guideline.md` §1.7).
+- The app still builds for every declared platform if the change touched dependencies, plugins,
+  native code, permissions or platform folders.
 - Generated files were regenerated if any annotated source was changed.
 
 ### 23.2 Production App Extension
@@ -3190,8 +3270,9 @@ A task is complete only when all applicable items are true.
 - No new jank frames introduced on the primary user flow (verified in profile mode if the change
   touched rendering, lists, or animations).
 - App size budget was checked if a new dependency was added.
-- The Google Play readiness gate in `docs/release_process.md` still holds for any change touching
-  the manifest, permissions, target SDK, signing, data collection, or store-listed behavior.
+- The store readiness gate of every declared distribution channel (`platform_store_readiness.md`)
+  still holds for any change touching manifests, `Info.plist`, entitlements, MSIX capabilities,
+  Snap/Flatpak permissions, target SDKs, signing, data collection, or store-listed behavior.
 
 ### 23.3 Sensitive Data Extension
 

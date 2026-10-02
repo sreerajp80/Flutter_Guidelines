@@ -10,7 +10,7 @@ It is a **living security blueprint template** for your Flutter app. It has 18 s
 - App-lock, session-expiry, background-lock, and protected-route enforcement (Section 7)
 - Binary protections — obfuscation, R8/ProGuard, debuggable flag (Section 8)
 - What is allowed and prohibited in logs (Section 9)
-- Platform-specific controls — Android FLAG_SECURE, iOS app-switcher overlay, Windows Credential Manager (Section 10)
+- Platform-specific controls — Android FLAG_SECURE, iOS app-switcher overlay, Windows Credential Manager and MSIX capabilities, macOS App Sandbox and Hardened Runtime, Linux Secret Service and Snap/Flatpak confinement (Section 10)
 - Every permission the app requests, why, when, and what happens on denial (Section 11)
 - OWASP Mobile Top 10 compliance sign-off table (Section 12)
 - Data retention schedule and the purge implementation (Section 13)

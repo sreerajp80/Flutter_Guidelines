@@ -1,31 +1,56 @@
 # Flutter Build Flavors Guide
 
 Use this as a reusable reference for Flutter projects that define build flavors such as `dev`
-and `prod` across Android, iOS, and Windows desktop.
+and `prod` across Android, iOS, and Windows, macOS and Linux desktop.
 
 This guide documents one well-tested approach for each platform. It is not the only valid
 approach. Teams with different CI pipelines, signing strategies, or flavor matrices should treat
 the examples here as a starting point and document their deviations in `docs/architecture.md`.
 
-> **Reflects Flutter 3.44 / Dart 3.12 (mid 2026).** Where a constraint comes from a
-> specific Flutter version (UIScene, 16 KB pages, Java 17, etc.), the version is named so
-> you can verify against your toolchain.
+> **Last checked against Flutter 3.47 / Dart 3.13 (2026-10).** This guide does not pin tool
+> versions. Use the latest stable Flutter. Where a rule only applies from a certain version
+> on (UIScene, 16 KB pages, AGP 9, iOS 15, etc.), the version is named as a condition so you
+> can check it against your own toolchain.
 
 ---
 
 ## Toolchain Prerequisites
 
-Before any flavored build runs, the host toolchain MUST satisfy these minimums:
+Toolchain rules:
+
+- **Use the latest stable Flutter** (and the Dart SDK that ships with it).
+- **Android: use the AGP, Kotlin Gradle Plugin (KGP) and Gradle versions that Flutter
+  generates.** `flutter create` writes them for new projects, and `flutter upgrade` plus the
+  Flutter migrator update them in existing projects. Do NOT hand-pick or hand-downgrade them.
+- **Each project pins its own versions** in its own files: `android/settings.gradle.kts`
+  (AGP, KGP), `android/gradle/wrapper/gradle-wrapper.properties` (Gradle), `pubspec.lock`,
+  and the CI image. This guide does not pin them for you.
+- **Look up versions, never guess them.** AI agents and contributors MUST read the current
+  versions from `flutter --version` and the project files above before writing or changing
+  build files. Never write a version from memory — memory is usually one or more releases
+  behind, and that is how old AGP versions and `kotlinOptions { }` blocks come back.
+
+These minimums are hard limits — a build below them fails:
 
 | Concern | Minimum | Notes |
 |---------|---------|-------|
-| Flutter | 3.44 (3.44+ recommended) | Below 3.38 misses UIScene auto-migration and Java 17 alignment |
-| Dart | 3.12 (ships with Flutter 3.44) | `flutter pub run` is deprecated; use `dart run` |
-| JDK (Android builds) | **Java 17** (Flutter 3.38+) | Java 11 builds fail; Gradle 8.14+ needs JDK 17 |
-| AGP (Android Gradle Plugin) | 8.x — **NOT 9.x** | AGP 9 audit is paused as of Flutter 3.41 |
-| iOS deployment target | **iOS 13** (Flutter 3.41 raised from iOS 12) | Set in `ios/Podfile` and Xcode Build Settings |
-| Xcode (iOS prod builds) | Xcode 26 (iOS 26 SDK) | Required for App Store submissions; deadline (April 2026) is now in force |
+| JDK (Android builds) | **Java 17** | Java 11 builds fail; Gradle 9 needs JDK 17 |
+| iOS deployment target | **iOS 15** (since Flutter 3.47) | Set in `ios/Podfile` and Xcode Build Settings |
+| macOS deployment target | **macOS 12** (since Flutter 3.47) | Only for apps that ship on macOS |
+| Linux build packages | clang, cmake, ninja-build, pkg-config, libgtk-3-dev, liblzma-dev, libstdc++-12-dev | Only for apps that ship on Linux; build on the oldest supported distro |
+| Xcode (iOS prod builds) | Xcode 26 (iOS 26 SDK) or later | App Store requires the iOS 26 SDK (since April 2026). With Xcode 27, apps without UIScene fail to launch |
 | Android target SDK (Play Store) | API 35 (Android 15) with **16 KB page support** | Mandatory from Nov 1 2025 / May 31 2026 |
+
+**Reference snapshot — not a rule.** When this guide was last checked (2026-10), the latest
+stable Flutter generated the versions below. Use them only to spot a project that is clearly
+behind; always use what your own Flutter generates.
+
+| Tool | Last checked (Flutter 3.47.6, 2026-10) |
+|------|----------------------------------------|
+| Flutter / Dart | 3.47 / 3.13 |
+| AGP (Android Gradle Plugin) | 9.1.0 |
+| Kotlin Gradle Plugin (KGP) | 2.4.0 |
+| Gradle (wrapper) | 9.3.1 |
 
 If any of these is missing, fix it before adopting any flavor configuration below — the
 flavor mechanics work, but the resulting build will fail at submission time.
@@ -75,8 +100,8 @@ Flutter ≥ 3.19 owns the `FLUTTER_APP_FLAVOR` compile-time environment variable
   Do not use `FLUTTER_APP_FLAVOR` as the dart-define name on Windows — the same framework
   reservation applies even when `--flavor` is absent.
 
-- Linux and macOS desktop currently behave like Windows for the purposes of this guide:
-  prefer `APP_FLAVOR` for any desktop builds where `--flavor` is unavailable.
+- Linux and macOS desktop use the same `APP_FLAVOR` pattern as Windows. See "macOS Desktop
+  Flavor Setup" and "Linux Desktop Flavor Setup" below for side-by-side installs.
 
 ### Reading The Flavor At Runtime
 
@@ -104,11 +129,65 @@ custom `APP_FLAVOR` dart-define — see the desktop fallback pattern in
 
 ## Android Flavor Setup
 
-> **Build script DSL.** Flutter 3.41 makes Kotlin DSL (`build.gradle.kts`) the default for
-> new Android projects. Inherited Groovy DSL projects (`build.gradle`) still work but use
-> `flavorDimensions "environment"` (no `+=` operator) and string literals where the
+> **Build script DSL.** Kotlin DSL (`build.gradle.kts`) is the default for new Android
+> projects (since Flutter 3.41). Inherited Groovy DSL projects (`build.gradle`) still work but
+> use `flavorDimensions "environment"` (no `+=` operator) and string literals where the
 > Kotlin examples below use named-argument syntax. The flavor mechanics are identical;
 > only the surface syntax differs.
+
+### Android Toolchain Baseline (AGP 9+ / Gradle 9+)
+
+Every flavored project MUST use the AGP, KGP and Gradle versions that its Flutter version
+generates (see "Toolchain Prerequisites"). Since Flutter 3.47 that means AGP 9 and Gradle 9,
+so the rules below apply. The versions are set in these two files:
+
+```kotlin
+// android/settings.gradle.kts — EXAMPLE versions (last checked 2026-10).
+// Use the versions your Flutter generates, not these.
+plugins {
+    id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+    id("com.android.application") version "9.1.0" apply false
+    id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+}
+```
+
+```properties
+# android/gradle/wrapper/gradle-wrapper.properties — EXAMPLE version (last checked 2026-10)
+distributionUrl=https\://services.gradle.org/distributions/gradle-9.3.1-all.zip
+```
+
+On AGP 9 and later, AGP **rejects the `kotlinOptions { }` block**. Set the JVM target with the top-level
+`kotlin { compilerOptions { } }` block in `android/app/build.gradle.kts` instead:
+
+```kotlin
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+android {
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    // NO kotlinOptions { jvmTarget = "17" } here — AGP 9 fails the build.
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+```
+
+Notes:
+
+- The Flutter migrator adds `android.builtInKotlin=false` and `android.newDsl=false` to
+  `android/gradle.properties`. Keep them until the Flutter app template drops them. With
+  `builtInKotlin=false` the Flutter Gradle plugin applies Kotlin, so the app module's
+  `plugins { }` block does not need `org.jetbrains.kotlin.android`.
+- Gradle 9 and later have no `project.exec { }`. Custom tasks (for example a task that runs a Dart
+  script to generate build metadata) MUST use an injected `ExecOperations` instead.
+- After the upgrade, run a clean `flutter build apk --flavor dev` and
+  `flutter build appbundle --flavor prod --release` before any other change, so toolchain
+  failures are not mixed with feature changes.
 
 ### Product Flavors In Gradle
 
@@ -279,9 +358,10 @@ android {
 
     bundle {
         language {
-            // REQUIRED (engineering standard §8.1). Play splits App Bundles by language
-            // by default, so a phone set to English would get no Malayalam or Sanskrit
-            // resources, and the in-app language picker could not switch to them.
+            // REQUIRED when the app has an in-app language picker (engineering standard
+            // §8.1). Play splits App Bundles by language by default, so a phone set to
+            // English would get no resources for the other declared languages, and the
+            // in-app language picker could not switch to them.
             enableSplit = false
         }
     }
@@ -411,8 +491,8 @@ classes that are loaded dynamically or accessed via JVM reflection, causing
 `ClassNotFoundException` or `NoSuchMethodException` at runtime — errors that only appear
 in release builds.
 
-> **R8 full mode is the default** since AGP 8.0 (and therefore for any Flutter ≥ 3.38
-> project on AGP 8.x). Full mode is more aggressive about removing seemingly-unused
+> **R8 full mode is the default** since AGP 8.0 (and therefore for every current Flutter
+> project, which is on AGP 9 or later). Full mode is more aggressive about removing seemingly-unused
 > classes than the legacy compatibility mode, which makes correct keep rules more
 > important — not less. If a release build crashes with `ClassNotFoundException` for a
 > class that exists in source, suspect missing keep rules first.
@@ -529,19 +609,19 @@ Document any non-compliant dependency as a release-blocking risk in
 
 ## iOS Flavor Setup
 
-### iOS Deployment Target And UIScene Migration (Mandatory, Flutter ≥ 3.38)
+### iOS Deployment Target And UIScene Migration (Mandatory, Since Flutter 3.47)
 
 Two pre-flight requirements precede any iOS flavor work:
 
-1. **Deployment target: iOS 13.** Flutter 3.41 raised the minimum from iOS 12 to iOS 13.
-   Set `platform :ios, '13.0'` in `ios/Podfile` and update the iOS Deployment Target in
+1. **Deployment target: iOS 15.** Flutter 3.47 raised the minimum from iOS 13 to iOS 15.
+   Set `platform :ios, '15.0'` in `ios/Podfile` and update the iOS Deployment Target in
    Xcode (Build Settings → Deployment → iOS Deployment Target).
 
 2. **UIScene lifecycle adoption.** Apple requires UIScene for any UIKit app built with the
-   iOS 26 SDK; the iOS release after iOS 26 will refuse to launch non-UIScene apps. The App
-   Store requires iOS 26 SDK builds, and that deadline (**April 2026**) is now in force.
-   Flutter 3.41 enables UIScene by default and its CLI auto-migrates apps with an unmodified
-   `AppDelegate`.
+   iOS 26 SDK, and apps built with **Xcode 27** that do not adopt UIScene fail to launch. The
+   App Store requires iOS 26 SDK builds, and that deadline (**April 2026**) is now in force.
+   Flutter enables UIScene by default (since 3.41) and its CLI auto-migrates apps with an
+   unmodified `AppDelegate`.
    - **Auto-migration success log:** `Finished migration to UIScene lifecycle` after a build.
    - **Manual migration required when:** `AppDelegate` has custom code (analytics SDK init,
      deep-link handlers, custom plugin registration).
@@ -854,9 +934,94 @@ void main() async {
 
 ---
 
+## macOS Desktop Flavor Setup
+
+macOS reads the flavor the same way as the other desktops: pass
+`--dart-define=APP_FLAVOR=<name>`, never `FLUTTER_APP_FLAVOR`. This is enough when dev and prod
+only differ in Dart behavior.
+
+When dev and prod must be **installed side by side** or show **different names**, they need
+different bundle ids. Use the iOS pattern (see "Xcode Scheme And xcconfig Setup" above) inside
+`macos/`:
+
+```text
+macos/Runner/Configs/
+|-- AppInfo.xcconfig        # prod: PRODUCT_NAME, PRODUCT_BUNDLE_IDENTIFIER, PRODUCT_COPYRIGHT
+`-- AppInfo-dev.xcconfig    # #include "AppInfo.xcconfig", then override name and bundle id
+```
+
+```
+// macos/Runner/Configs/AppInfo-dev.xcconfig
+#include "AppInfo.xcconfig"
+PRODUCT_NAME = MyApp Dev
+PRODUCT_BUNDLE_IDENTIFIER = com.example.myapp.dev
+```
+
+Create a `dev` scheme / build configuration in `macos/Runner.xcworkspace` that uses it. Recent
+Flutter releases accept `--flavor` for macOS when a matching Xcode scheme exists; confirm with
+`flutter build macos -h` on your toolchain before relying on it, and keep passing `APP_FLAVOR`
+so `AppFlavorConfig` works either way.
+
+Entitlements are per build configuration: if a dev build needs extra entitlements (for example a
+local debug server), add them to `DebugProfile.entitlements` only — never to
+`Release.entitlements`.
+
+### macOS Run And Build Commands
+
+```bash
+flutter run -d macos --dart-define=APP_FLAVOR=dev
+
+flutter build macos --release \
+  --dart-define=APP_FLAVOR=prod \
+  --obfuscate \
+  --split-debug-info=build/symbols/macos-prod-<version>/
+```
+
+Signing, notarization and store upload: `docs/platform_store_readiness.md` §5.
+
+---
+
+## Linux Desktop Flavor Setup
+
+Linux also uses `--dart-define=APP_FLAVOR=<name>`. Build machine setup and `APPLICATION_ID` are
+described in engineering standard §5.5.3.
+
+When dev and prod must be installed side by side, they need different `APPLICATION_ID` values
+(and usually different `BINARY_NAME`s). `flutter build linux` runs CMake with the caller's
+environment, so one simple approach is an environment-variable suffix in `linux/CMakeLists.txt`:
+
+```cmake
+set(BINARY_NAME "my_app")
+set(APPLICATION_ID "com.example.my_app")
+
+# Optional flavor suffix, e.g. APP_ID_SUFFIX=.dev for side-by-side dev installs.
+if(DEFINED ENV{APP_ID_SUFFIX})
+  set(APPLICATION_ID "${APPLICATION_ID}$ENV{APP_ID_SUFFIX}")
+  set(BINARY_NAME "${BINARY_NAME}_dev")
+endif()
+```
+
+Keep separate `.desktop`, icon and packaging files (`snapcraft.yaml`, Flatpak manifest) per
+flavor only if a dev flavor is actually distributed; most projects package `prod` only.
+
+### Linux Run And Build Commands
+
+```bash
+flutter run -d linux --dart-define=APP_FLAVOR=dev
+
+flutter build linux --release \
+  --dart-define=APP_FLAVOR=prod \
+  --obfuscate \
+  --split-debug-info=build/symbols/linux-prod-<version>/
+```
+
+Packaging and store upload: `docs/platform_store_readiness.md` §6.
+
+---
+
 ## Recommended Release Matrix
 
-For most Flutter projects targeting Android, iOS, and Windows:
+Keep the rows for the platforms your project declares:
 
 > **Implicit flag — `--tree-shake-icons`.** Release builds tree-shake unused Material
 > icons automatically when icons are referenced via `const Icon(Icons.x)` constructors
@@ -875,6 +1040,10 @@ For most Flutter projects targeting Android, iOS, and Windows:
 | iOS | `prod` | `release` | Yes — distribution profile required | `flutter build ipa --flavor prod --release --obfuscate --split-debug-info=...` |
 | Windows | n/a | `debug` | No | `flutter run -d windows --dart-define=APP_FLAVOR=dev` |
 | Windows | n/a | `release` MSIX | Depends on distribution channel — see Windows section | `flutter build windows --release --dart-define=APP_FLAVOR=prod --obfuscate --split-debug-info=...` then `dart run msix:create` |
+| macOS | n/a | `debug` | No — development signing | `flutter run -d macos --dart-define=APP_FLAVOR=dev` |
+| macOS | n/a | `release` | Yes — Apple Distribution (Mac App Store) or Developer ID + notarization | `flutter build macos --release --dart-define=APP_FLAVOR=prod --obfuscate --split-debug-info=...` |
+| Linux | n/a | `debug` | No | `flutter run -d linux --dart-define=APP_FLAVOR=dev` |
+| Linux | n/a | `release` | Store-side for Snap / Flathub; optional GPG for direct packages | `flutter build linux --release --dart-define=APP_FLAVOR=prod --obfuscate --split-debug-info=...` then package |
 
 ---
 
@@ -924,8 +1093,10 @@ To support this workflow, the native projects typically need:
 - ProGuard rules for the Flutter engine and any native plugins that require them.
 - A documented and implemented signing strategy for each flavor × mode combination.
 - `android/key.properties`, `android/*.jks`, and `android/*.keystore` added to `.gitignore`.
-- **Java 17** as the minimum JDK (Flutter ≥ 3.38). AGP must remain on 8.x; AGP 9 migration
-  is paused.
+- **Java 17** minimum, and the AGP / KGP / Gradle versions the latest stable Flutter
+  generates — pinned in the project's own `settings.gradle.kts` and Gradle wrapper. On
+  AGP 9+, use `kotlin { compilerOptions { } }`, never `kotlinOptions { }` (see "Android
+  Toolchain Baseline" above).
 - **16 KB page-size compliance** for any release targeting Android 15+. Audit bundled
   `.so` files in dependencies before each Play Store submission (see "16 KB Page Size
   Compliance" above).
@@ -936,14 +1107,15 @@ To support this workflow, the native projects typically need:
 - Provisioning profiles per flavor bundle ID.
 - Flavor-specific app icons in asset catalogs.
 - Distribution profile required for `prod --release`; automatic signing for debug and dev.
-- **iOS 13** as the minimum deployment target (Flutter ≥ 3.41); update `ios/Podfile` and
+- **iOS 15** as the minimum deployment target (since Flutter 3.47); update `ios/Podfile` and
   Xcode Build Settings.
 - **UIScene Application Scene Manifest** in `Info.plist`. `FlutterImplicitEngineDelegate`
   adoption in `AppDelegate` if any custom code (analytics, deep-link handlers, plugin
   registration) was added beyond the default. Move flavor-conditional setup to
   `didInitializeImplicitFlutterEngine`.
-- Plan an iOS 26 SDK (Xcode 26) build before April 2026 to remain App-Store-submittable.
-  The April 2026 deadline is now in force; new submissions without iOS 26 SDK are rejected.
+- Build with the iOS 26 SDK (Xcode 26) or later to remain App-Store-submittable; new
+  submissions without the iOS 26 SDK are rejected. Before moving to Xcode 27, confirm the
+  UIScene migration is complete — non-UIScene apps built with Xcode 27 fail to launch.
 
 **Windows:**
 - `sqflite_common_ffi` initialization in `main()` for any desktop + sqflite usage.
@@ -954,3 +1126,19 @@ To support this workflow, the native projects typically need:
   if side-by-side installation is required.
 - For Microsoft Store submission, build a multi-architecture `.msixbundle` (x64 + arm64);
   for sideloading, single-architecture `.msix` is sufficient.
+**macOS:**
+- Bundle id, name and copyright in `macos/Runner/Configs/AppInfo.xcconfig` (plus a dev
+  xcconfig and scheme if dev and prod install side by side).
+- **macOS 12** minimum deployment target (since Flutter 3.47) in `macos/Podfile` and Xcode.
+- Least-privilege entitlements in both `DebugProfile.entitlements` and
+  `Release.entitlements` — add `com.apple.security.network.client` if the app uses the
+  network.
+- Hardened Runtime on; Developer ID signing + notarization for direct download, or Apple
+  Distribution signing for the Mac App Store.
+
+**Linux:**
+- GTK build packages on the build machine; build on the oldest supported distro.
+- `APPLICATION_ID` (reverse-DNS) and `BINARY_NAME` in `linux/CMakeLists.txt`.
+- `sqflite_common_ffi` initialization in `main()` (as on Windows).
+- `.desktop` file, icons and AppStream metainfo for packaging; Snap / Flatpak / AppImage /
+  `.deb` packaging chosen per declared channel.

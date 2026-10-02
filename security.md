@@ -14,11 +14,12 @@ If the app is not security-sensitive, keep this file short and document that dec
 - Engineering standard profiles in force:
   - `Core Baseline`
   - `Sensitive Data Extension` if applicable
-- Platforms in scope:
+- Platforms in scope (the declared platforms from `docs/PROJECT_PROFILE.md`; delete the rest):
   - `Android`
   - `iOS`
   - `Windows`
-  - `<other>`
+  - `macOS`
+  - `Linux`
 
 ---
 
@@ -222,6 +223,33 @@ and inject code.
 - Application data directory access: store sensitive files in
   `getApplicationSupportDirectory()`, not a shared or user-accessible directory.
 - Verify no sensitive data is written to Windows Event Log.
+- MSIX capabilities: only the ones the app uses (`docs/platform_store_readiness.md` §4.1).
+- Direct-download builds are code-signed and timestamped; never ship an unsigned installer.
+
+### macOS
+
+- **App Sandbox** on in `Release.entitlements`; entitlements are least-privilege and match
+  `DebugProfile.entitlements` except for debug-only needs (engineering standard §5.5.2).
+- **Hardened Runtime** on; no `com.apple.security.cs.allow-unsigned-executable-memory`,
+  `disable-library-validation` or similar exceptions in release unless documented here.
+- Keychain usage: `<usage — e.g. flutter_secure_storage uses the macOS Keychain>`.
+- Sensitive files in `getApplicationSupportDirectory()` (inside the sandbox container), never in
+  Documents or Desktop unless the user chose the location.
+- Required privacy descriptions in `Info.plist` for camera, microphone, etc., as on iOS.
+- Direct-download builds are Developer ID signed, notarized and stapled
+  (`docs/platform_store_readiness.md` §5.3).
+
+### Linux
+
+- Secret storage via the Secret Service (`libsecret`, e.g. `flutter_secure_storage`). Define the
+  behavior when no keyring is available (headless or minimal desktops): fail safely, never fall
+  back to plain-text files.
+- Sensitive files in `getApplicationSupportDirectory()` (under `$XDG_DATA_HOME`) with file mode
+  `0600` / directory mode `0700`.
+- Confinement: Snap `strict` confinement with least-privilege plugs; Flatpak `finish-args` without
+  broad `--filesystem=home` (use portals). Unconfined direct packages (`.deb`, AppImage) are
+  documented as such in this file.
+- Verify no sensitive data is written to stdout/stderr, which the system journal may capture.
 
 ---
 
@@ -234,7 +262,11 @@ and inject code.
 
 Permission review rules:
 - Request only permissions the app currently uses. Remove unused permissions promptly.
-- For offline apps: verify `INTERNET` permission is absent from the merged release manifest.
+- For offline apps: verify `INTERNET` permission is absent from the merged release manifest,
+  and that no network entitlement (macOS), `internetClient` capability (MSIX), `network` plug
+  (Snap) or `--share=network` (Flatpak) is declared.
+- List every declared platform's permission mechanism in the table above (Android permission,
+  iOS/macOS usage string + entitlement, MSIX capability, Snap plug, Flatpak `finish-args`).
 - Dangerous permissions MUST be requested at the point of use with a rationale, not at startup.
 - The app MUST function in a degraded but safe state if a non-critical permission is denied.
 
@@ -302,6 +334,12 @@ Define what data is stored, how long it lives, and what triggers deletion.
 - Windows: `flutter_secure_storage` writes to Windows Credential Manager, which persists across
   app reinstall. Implement a first-run detection and credential purge if a clean uninstall
   + reinstall should produce a fresh state.
+- macOS: sandboxed app data lives in `~/Library/Containers/<bundle id>/` and is **not** removed
+  when the app is dragged to the Trash; Keychain items also persist. Use the same first-run
+  detection and purge as Windows if a reinstall must start fresh.
+- Linux: Snap removes its data on `snap remove` (a snapshot may be kept); Flatpak keeps
+  `~/.var/app/<id>/` unless the user removes it; `.deb` / AppImage never remove user data.
+  Secret Service entries persist. Apply first-run detection and purge where required.
 
 ---
 

@@ -15,7 +15,8 @@ Use this document to describe the current system design of the Flutter app.
   - `Core Baseline`
   - `Production App Extension` if applicable
   - `Sensitive Data Extension` if applicable
-- Platforms: `Android`, `iOS`, `Web`, `Desktop` as applicable
+- Platforms: copy the declared platforms from `docs/PROJECT_PROFILE.md` (`Android`, `iOS`,
+  `Windows`, `macOS`, `Linux`, `Web`)
 
 ---
 
@@ -261,12 +262,28 @@ Migration history:
 
 - Flavors used: `<dev/prod/staging/none>`
 - Runtime config mechanism: `<dart-define/config file/native flavor>`
-- Build outputs supported:
-  - `<debug apk>`
-  - `<release apk split-per-abi>`
-  - `<app bundle>`
-  - `<windows MSIX>`
 - Obfuscation: `<enabled for prod release — symbols stored at <location>>`
+
+### Target Platforms And Distribution
+
+One row per declared platform (from `docs/PROJECT_PROFILE.md`). Delete the rest.
+
+| Platform | Minimum OS | Release artifact | Channel(s) | Signing | Platform-specific notes |
+|---|---|---|---|---|---|
+| Android | `minSdk <NN>` (reason) | `.aab` / split `.apk` | `<Google Play / direct>` | release keystore + Play App Signing | `<16 KB pages, permissions>` |
+| iOS | `iOS <NN>` | `.ipa` | App Store | Apple Distribution | `<capabilities, usage strings>` |
+| Windows | `Windows 10 <build>` | `.msix` / installer | `<Microsoft Store / direct>` | Store-signed / code-signing cert | `<MSIX capabilities>` |
+| macOS | `macOS <NN>` | `.app` → `.pkg` / `.dmg` | `<Mac App Store / Developer ID>` | Apple Distribution / Developer ID + notarization | `<entitlements>` |
+| Linux | `<oldest distro>` | `.snap` / Flatpak / AppImage / `.deb` | `<Snap Store / Flathub / direct>` | store-side / GPG checksums | `<plugs, finish-args>` |
+
+### Platform Differences
+
+List any feature that behaves differently, or is missing, on a declared platform, and how the
+code handles it (e.g. "no background sync on desktop — sync runs on app start").
+
+| Feature | Android | iOS | Windows | macOS | Linux |
+|---|---|---|---|---|---|
+| `<feature>` | `<behavior>` | `<behavior>` | `<behavior>` | `<behavior>` | `<behavior>` |
 
 ---
 
@@ -278,7 +295,8 @@ Migration history:
 - Accessibility expectations:
   - Minimum touch target: 48 × 48 dp on mobile
   - Color contrast: WCAG AA minimum (4.5:1 normal text, 3:1 large text)
-  - Screen reader: TalkBack (Android), Narrator (Windows) tested before each release
+  - Screen reader: TalkBack (Android), VoiceOver (iOS, macOS), Narrator (Windows), Orca (Linux)
+    — each declared platform tested before each release
   - Text scale: layouts verified at 1.0×, 1.5×, 2.0× text scale
 
 ---

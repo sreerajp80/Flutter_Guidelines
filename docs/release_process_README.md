@@ -10,8 +10,8 @@ It is a **living release playbook** for your Flutter app. Unlike `architecture.m
 - Mandatory release-build hardening — `--obfuscate`, `--split-debug-info`, R8/ProGuard rules, app size analysis, and Android manifest/asset security verifications (`debuggable=false`, `allowBackup=false`, cleartext traffic, asset audit) (Section 6)
 - Signing material handling and keystore backup policy (Section 7)
 - The full pre-release checklist split across Code & Quality, Performance, Security, Product & Documentation, and Artifact Validation (Section 8)
-- Step-by-step Android, iOS, and Windows release procedures with exact build commands (Sections 9–11)
-- The **Google Play Store readiness gate** — package identity, target API level policy, App Bundle and Play App Signing, permission justifications, privacy policy and Data safety declarations, listing assets and their exact sizes, English and Malayalam listings, pre-launch report and staged rollout (Section 9A). Every app is built to be publishable on Play, so this gate is completed before the first upload and re-checked before every production release. Sanskrit ships inside the app but cannot be a Play listing language — that is expected, not a gap.
+- Step-by-step Android, iOS, Windows, macOS and Linux release procedures with exact build commands (Sections 9, 10, 11, 11A, 11B)
+- A pointer to the **store readiness gates** (Section 9A). The gates themselves — Google Play, App Store, Microsoft Store, Mac App Store / Developer ID, Snap Store / Flathub — now live in `platform_store_readiness.md`. Each declared channel's gate is completed before the first upload and re-checked before every production release.
 - Distribution channels per platform (Section 12)
 - Rollback and hotfix process (Section 13)
 - Release evidence — what to archive after each release (Section 14)

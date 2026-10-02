@@ -12,11 +12,13 @@ scope clearly.
 
 - App: `<app name>`
 - Release profile: `internal`, `beta`, `public`, or `not yet shipping`
-- Supported release platforms:
-  - `Android`
-  - `iOS`
-  - `Windows`
-  - `<other>`
+- Supported release platforms (copy from `docs/PROJECT_PROFILE.md`; delete the rest):
+  - `Android` — channels: `<Google Play / direct APK>`
+  - `iOS` — channels: `<App Store>`
+  - `Windows` — channels: `<Microsoft Store / signed direct download>`
+  - `macOS` — channels: `<Mac App Store / Developer ID notarized download>`
+  - `Linux` — channels: `<Snap Store / Flathub / AppImage / .deb / .rpm>`
+- Store gates in force: the sections of `docs/platform_store_readiness.md` for each channel above.
 - Engineering standard profiles in force:
   - `Core Baseline`
   - `Production App Extension`
@@ -66,7 +68,7 @@ Adjust the matrix if the project uses `staging`, `qa`, or no flavors.
 
 > **Flavor signal at build time.** On Android and iOS, `--flavor <name>` is sufficient —
 > the Flutter tool auto-injects `FLUTTER_APP_FLAVOR` and rejects any attempt to set it via
-> `--dart-define`. On Windows desktop, `--flavor` is not supported; pass
+> `--dart-define`. On Windows, macOS and Linux desktop, pass
 > `--dart-define=APP_FLAVOR=<name>` instead. See
 > `docs/flutter_build_flavors_guide.md` and `docs/flutter_project_engineering_standard.md §5.2`
 > for the full rationale and the matching `AppFlavorConfig` reader.
@@ -131,7 +133,19 @@ flutter build ipa --flavor prod --release \
 flutter build windows --release \
   --dart-define=APP_FLAVOR=prod \
   --analyze-size
+
+# macOS
+flutter build macos --release \
+  --dart-define=APP_FLAVOR=prod \
+  --analyze-size
+
+# Linux
+flutter build linux --release \
+  --dart-define=APP_FLAVOR=prod \
+  --analyze-size
 ```
+
+Run only the commands for declared platforms.
 
 Record the output in the release evidence section. Compare against the previous release.
 A size increase of more than 10% without a documented justification is a review item.
@@ -142,7 +156,10 @@ Size budgets (from engineering standard):
 |----------|--------|------------|
 | Android APK arm64 | < 30 MB | 50 MB |
 | Android AAB download | < 20 MB | 40 MB |
+| iOS App Store download | < 40 MB | 80 MB |
 | Windows MSIX | < 80 MB | 150 MB |
+| macOS `.app` / DMG | < 80 MB | 150 MB |
+| Linux bundle / package | < 80 MB | 150 MB |
 
 ### 6.4 Debuggable And Backup Verification (Android)
 
@@ -237,6 +254,9 @@ Inspect all declared activities, services, and broadcast receivers in the merged
   - CI logs must not print signing secrets.
   - Keystore files MUST be backed up in at least two separate secure locations.
     Losing the keystore means being unable to publish updates to the Play Store for that app.
+  - The same rules apply to Apple certificates and provisioning profiles, App Store Connect API
+    keys, notarization credentials, Windows code-signing certificates, and store upload tokens
+    (Snapcraft, Partner Center). See `guideline.md §2.5`.
 
 ---
 
@@ -272,6 +292,8 @@ Complete these items before every release.
 - [ ] Pre-release asset audit passed — no `.env`, keys, or mock data bundled in APK `assets/` (§6.6).
 - [ ] Manifest component export audit completed — no accidental `android:exported="true"` (§6.7).
 - [ ] Manifest and permission review completed — no unnecessary permissions.
+- [ ] Other declared platforms: iOS/macOS usage strings and entitlements, MSIX capabilities, Snap
+      plugs and Flatpak `finish-args` are least-privilege (`docs/security.md` §10).
 - [ ] OWASP Mobile Top 10 checklist reviewed (see `docs/security.md`).
 - [ ] Secrets, keys, and backup settings reviewed if applicable.
 - [ ] Sensitive-data flows revalidated if applicable.
@@ -279,34 +301,41 @@ Complete these items before every release.
 
 ### Localization
 
-- [ ] `app_en.arb`, `app_ml.arb` and `app_sa.arb` all present; translation parity test passes (ARB keys, `app_config.json`, and help assets; §8.7).
-- [ ] No untranslated English value left in the Malayalam or Sanskrit file.
-- [ ] Sanskrit Hindi-marker gate passes and glossary terms are used (engineering standard §8.5).
-- [ ] Short-label length budget respected in all three languages (§8.6).
-- [ ] Every screen opened in `en`, `ml` and `sa` on a clean device — no missing glyphs, no
-      overflow, no clipped Malayalam/Devanagari ascenders (§8.3.3).
-- [ ] In-app language picker works: System default / English / മലയാളം / संस्कृतम्, persists across
-      restart, applies without restart (§8.4).
-- [ ] Language splitting disabled in Gradle (`bundle.language.enableSplit = false`) so Play Store
-      users receive all three language resources for in-app switching.
-- [ ] Date pickers and dialogs verified under `sa` (the framework-delegate fallback, §8.3.1).
+All references are to the engineering standard unless noted. "Declared" means listed in
+`docs/PROJECT_PROFILE.md`.
+
+- [ ] One ARB file per declared language; translation parity test passes (ARB keys,
+      `app_config.json`, and help assets; §8.7).
+- [ ] No untranslated template-language value left in any other language's file.
+- [ ] Every applicable language pack's checklist passes (§8.5, `docs/guidelines/language_packs/`).
+- [ ] New or changed translations reviewed by a fluent reader (§8.5).
+- [ ] Short-label length budget respected in every declared language (§8.6).
+- [ ] Every screen opened in every declared language on a clean device — no missing glyphs, no
+      overflow, no clipped tall scripts (§8.3.3).
+- [ ] With two or more languages: in-app language picker works — System default + each language
+      by its endonym, persists across restart, applies without restart (§8.4).
+- [ ] With two or more languages and Android declared: language splitting disabled in Gradle
+      (`bundle.language.enableSplit = false`) so Play users receive every language (§8.1).
+- [ ] Date pickers and dialogs verified under every fallback-delegate language (§8.3.1).
 - [ ] Every icon-only control has a localized tooltip (§7.8).
-- [ ] About screen shows the "Made with ❤️ from India" badge, localized and centered
+- [ ] If the project profile enables the About signature badge: it shows, localized and centered
       (`docs/guideline.md` §1.7).
 
-### Google Play Store Readiness (Android)
+### Store Readiness (Every Declared Channel)
 
-- [ ] Full §9A gate completed for this release.
-- [ ] Language splitting disabled in App Bundle (`bundle.language.enableSplit = false`, §9A.3).
-- [ ] `targetSdkVersion` meets Play's current target API level policy (re-checked, not assumed).
-- [ ] `versionCode` strictly greater than every previously uploaded build.
-- [ ] App Bundle built; Play App Signing enabled; native debug symbols uploaded.
-- [ ] Permissions justified; sensitive-permission declarations completed in the console.
-- [ ] Privacy policy URL live; Data safety form matches actual behavior; content rating done.
-- [ ] Store listing assets ready at the required sizes (icon, feature graphic, screenshots).
-- [ ] English and Malayalam listings complete with localized screenshots.
-- [ ] Internal-testing upload done and pre-launch report clean.
-- [ ] Staged rollout percentage chosen and vitals monitoring planned.
+- [ ] `docs/platform_store_readiness.md` §1 (rules for every store) passes.
+- [ ] Google Play: §2 gate completed — target API level re-checked, `versionCode` increased, App
+      Bundle + Play App Signing, Data safety, listings and screenshots, internal testing and
+      pre-launch report clean, staged rollout planned.
+- [ ] Apple App Store: §3 gate completed — required Xcode/SDK, usage strings, privacy manifest,
+      App Privacy, export compliance, screenshots, TestFlight build verified.
+- [ ] Windows: §4 gate completed — WACK passed; Store identity values exact and `store: true`, or
+      direct-download package code-signed and timestamped; clean-VM install/upgrade/uninstall.
+- [ ] macOS: §5 gate completed — sandbox and entitlements verified in the release build; Mac App
+      Store upload via TestFlight, or Developer ID signed + notarized + stapled DMG verified with
+      `spctl` on a clean Mac.
+- [ ] Linux: §6 gate completed — desktop file and AppStream metadata validated; Snap / Flatpak /
+      direct packages tested on clean VMs under Wayland and X11.
 
 ### Product And Documentation
 
@@ -339,7 +368,7 @@ Complete these items before every release.
 9. Perform pre-release asset extraction audit to ensure no secrets were packaged in `assets/` (§6.6).
 10. Verify artifact naming, installability, and environment on a physical or emulated device.
 11. Archive debug symbols from `build/symbols/` to the secure archive location.
-12. Complete the Google Play readiness gate (§9A) before uploading to Play.
+12. Complete the Google Play readiness gate (`docs/platform_store_readiness.md` §2) before uploading to Play.
 13. Upload to the intended distribution channel (Play Store console or secure internal repository).
 14. Tag the release in git: `git tag v<version>` and push.
 
@@ -458,122 +487,42 @@ unzip -l build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk "asse
 
 ---
 
-## 9A. Google Play Store Readiness (Mandatory Gate)
+## 9A. Store Readiness Gates (Moved)
 
-Every app is built to be publishable on Google Play. This gate MUST pass **before the first upload**
-and MUST be re-checked before every production release. Items marked *(one-time)* are set up once
-and only re-verified afterwards.
+The Google Play readiness gate that used to live here, and the gates for every other store, are
+now in `docs/platform_store_readiness.md`:
 
-### 9A.1 Application identity and versioning
-
-| Item | Requirement |
+| Channel | Section |
 |---|---|
-| `applicationId` *(one-time)* | Reverse-DNS, owned domain, lowercase, permanent. It can never be changed after the first publish. Flavors may append a suffix (`.dev`), but the production id MUST have no suffix. |
-| `versionCode` | Strictly increasing integer on every upload, never reused — even for a rejected or rolled-back build. |
-| `versionName` | Matches `pubspec.yaml` (`<version>+<build>` → `versionName+versionCode`). |
-| App name | Set in `android/app/src/main/AndroidManifest.xml` via a localized `@string/app_name`, matching the store listing. |
-| Package visibility | If the app queries other packages, declare `<queries>` — Play rejects silent package enumeration. |
+| Every store | §1 |
+| Google Play | §2 (the old §9A.1–§9A.8 are now §2.1–§2.8) |
+| Apple App Store | §3 |
+| Microsoft Store / Windows direct download | §4 |
+| Mac App Store / Developer ID | §5 |
+| Snap Store / Flathub / Linux packages | §6 |
 
-### 9A.2 API level, ABI, and compatibility
-
-- `targetSdkVersion` MUST meet Play's current target API level policy (Play requires new apps and
-  updates to target an API level within one year of the latest major Android release; the deadline
-  is typically 31 August each year). Check the current requirement before each release rather than
-  trusting the value already in the project.
-- `compileSdkVersion` ≥ `targetSdkVersion`.
-- `minSdkVersion` is a deliberate, documented product decision — record it in `docs/architecture.md`.
-- 64-bit native code is mandatory: ship an App Bundle, or split APKs including `arm64-v8a`.
-- 16 KB page-size compliance is required for Android 15+ devices (see the engineering standard).
-- Edge-to-edge behavior verified when targeting SDK 35+.
-
-### 9A.3 Signing and upload
-
-- Ship an **Android App Bundle (`.aab`)**, not an APK, to Play.
-- **Language splitting MUST be disabled** (`bundle { language { enableSplit = false } }` in
-  `android/app/build.gradle.kts`). Without this, Play downloads only the phone's system language,
-  breaking the in-app language picker when switching to Malayalam or Sanskrit.
-- **Play App Signing** MUST be enabled *(one-time)*. Keep the upload key backed up offline; losing
-  the upload key is recoverable through Play support, losing a pre-App-Signing release key is not.
-- Signing config points at `android/key.properties` (see `docs/guideline.md` §2) and is **never**
-  committed.
-- `flutter build appbundle --release --obfuscate --split-debug-info=...` — all three flags, always.
-- Upload the native debug symbols (`build/symbols/`) to Play so crash traces de-obfuscate, and
-  archive them alongside the release evidence.
-
-### 9A.4 Manifest, permissions, and policy declarations
-
-- Every permission in the merged manifest is justified and used. Remove anything inherited from a
-  dependency that the app does not need (`tools:node="remove"`).
-- Sensitive permissions require an in-console declaration and are commonly rejected: all-files
-  access, exact alarms, accessibility service, SMS/call log, background location, camera/microphone
-  in the background, `QUERY_ALL_PACKAGES`.
-- Foreground services declare a `foregroundServiceType` and a use-case declaration in the console.
-- `android:debuggable=false`, `android:allowBackup` decided deliberately, `usesCleartextTraffic=false`
-  (§6.4, §6.5).
-- No accidental `android:exported="true"` (§6.7).
-- Ads, payments, and analytics SDKs are declared where the console asks for them.
-
-### 9A.5 Store account declarations
-
-- **Privacy policy URL** — reachable, public, app-specific. Required for every app, whether or not
-  it collects data.
-- **Data safety form** — completed and matching what the app actually does (including anything a
-  bundled SDK collects). A mismatch is a policy violation.
-- **Content rating questionnaire** — completed.
-- **Target audience and content** — declared; if children may be a target audience, the Families
-  policy applies.
-- **Ads declaration**, **news app declaration**, **COVID/health declarations** — where applicable.
-- **Account deletion** — if the app supports account creation, an in-app and a web-accessible
-  deletion path MUST exist and be declared.
-- **Developer contact details** and, for personal accounts created recently, Play's testing
-  requirements before production access.
-
-### 9A.6 Store listing assets
-
-| Asset | Requirement |
-|---|---|
-| App icon | 512 × 512 PNG, 32-bit, no alpha-dependent design |
-| Feature graphic | 1024 × 500 PNG/JPG |
-| Phone screenshots | 2–8, PNG/JPG, 16:9 or 9:16, min 320 px, max 3840 px on the longest side |
-| Tablet screenshots | Required if the app is distributed to tablets (7-inch and 10-inch sets) |
-| Short description | ≤ 80 characters |
-| Full description | ≤ 4000 characters |
-| App title | ≤ 30 characters, no keyword stuffing, no store badges or price in the title |
-
-### 9A.7 Localization of the listing
-
-The app itself ships English, Malayalam and Sanskrit (engineering standard section 8).
-
-- The Play listing MUST be provided in **English** and in **Malayalam** (`ml-IN`), including
-  localized screenshots.
-- **Sanskrit is not an available Play listing language.** It is shipped *inside* the app only; do
-  not attempt to add it as a store locale, and do not drop it from the app because the store cannot
-  list it.
-- Screenshots MUST show real app UI in the language of that listing — not English screenshots under
-  the Malayalam listing.
-
-### 9A.8 Pre-launch verification
-
-- Upload to **internal testing** first; run the Play Console **pre-launch report** and resolve all
-  crashes, ANRs, and flagged accessibility and security items.
-- Verify the app installs, launches, and completes its primary flow from a Play-served build (not
-  just a locally installed APK), in all three languages.
-- Android vitals thresholds reviewed after each rollout (crash rate, ANR rate).
-- Production rollout starts as a **staged rollout** (e.g. 10% → 50% → 100%) with vitals checked at
-  each step.
+Each declared channel's gate MUST pass before the first upload and be re-checked before every
+production release.
 
 ---
 
 ## 10. iOS Release Steps
 
-1. Confirm signing and provisioning are valid for the prod flavor bundle ID.
-2. Run format, analyze, test, and code generation checks.
-3. Build the iOS release artifact.
-4. Run size analysis.
-5. Validate permissions, metadata, and environment config.
-6. Archive debug symbols.
-7. Upload through the approved pipeline (Xcode Organizer or `xcrun altool`).
-8. Confirm TestFlight or App Store processing.
+Build machine: macOS with the Xcode version App Store Connect currently requires.
+
+1. Pull the intended release commit and verify it is clean (`git status`).
+2. Confirm signing and provisioning are valid for the prod bundle id (Apple Distribution
+   certificate, App Store profile).
+3. Run format, analyze, test, and code generation checks.
+4. Build the iOS release artifact with all hardening flags (commands below).
+5. Run size analysis and record output.
+6. Validate `Info.plist` usage strings, privacy manifest, export compliance, and environment
+   config (`docs/platform_store_readiness.md` §3.3).
+7. Archive debug symbols from `build/symbols/`.
+8. Upload the `.ipa` with Xcode Organizer or Transporter.
+9. Test the build through TestFlight on a real device, in every declared language.
+10. Complete the App Store gate (`docs/platform_store_readiness.md` §3) and submit for review.
+11. Tag the release in git: `git tag v<version>` and push.
 
 ### iOS Build Commands
 
@@ -590,19 +539,27 @@ flutter build ipa \
   --analyze-size
 ```
 
+Drop `--flavor prod` if the app has no flavors.
+
 ---
 
 ## 11. Windows Release Steps
+
+Build machine: Windows (x64; arm64 builds need an arm64-capable toolchain).
 
 1. Pull the intended release commit.
 2. Verify the version in `pubspec.yaml` and the `msix_config` version in `pubspec.yaml`.
 3. Run format, analyze, test, and code generation checks.
 4. Build the Windows release.
 5. Run size analysis.
-6. Create the MSIX package.
-7. Verify the MSIX installs cleanly on a clean Windows environment (not the dev machine).
-8. Archive debug symbols.
-9. Distribute.
+6. Create the MSIX package — `store: true` for the Microsoft Store, or signed with the
+   code-signing certificate (from the CI secret store) for direct download.
+7. Run the Windows App Certification Kit on the package.
+8. Verify the MSIX installs, upgrades from the previous version, and uninstalls cleanly on a clean
+   Windows environment (not the dev machine).
+9. Archive debug symbols.
+10. Complete the Windows gate (`docs/platform_store_readiness.md` §4), then submit to Partner
+    Center or publish the signed download with its checksum.
 
 ### Windows Build Commands
 
@@ -623,12 +580,92 @@ dart run msix:create
 
 ---
 
+## 11A. macOS Release Steps
+
+Build machine: macOS with a current Xcode.
+
+1. Pull the intended release commit.
+2. Verify the version in `pubspec.yaml`, and the bundle id and category in `macos/Runner/`.
+3. Run format, analyze, test, and code generation checks.
+4. Build the macOS release with all hardening flags (commands below).
+5. Run size analysis; confirm a universal binary with `lipo -archs`.
+6. Verify the **release** build with its real entitlements: network, file access, and every
+   sandboxed feature work (missing entitlements usually fail only in release).
+7. Archive debug symbols.
+8. Distribute:
+   - **Mac App Store**: archive in Xcode (`macos/Runner.xcworkspace`) → Distribute App → App Store
+     Connect; test through TestFlight; submit for review.
+   - **Developer ID**: sign with hardened runtime, notarize with `xcrun notarytool`, staple with
+     `xcrun stapler`, package as a signed, notarized and stapled DMG, and verify with `spctl` on a
+     clean Mac (`docs/platform_store_readiness.md` §5.3).
+9. Complete the macOS gate (`docs/platform_store_readiness.md` §5).
+
+### macOS Build Commands
+
+```bash
+flutter build macos \
+  --release \
+  --dart-define=APP_FLAVOR=prod \
+  --obfuscate \
+  --split-debug-info=build/symbols/macos-prod-<version>/
+
+# Output: build/macos/Build/Products/Release/<App>.app
+```
+
+---
+
+## 11B. Linux Release Steps
+
+Build machine: the oldest Linux distribution you support (or its container), with the GTK
+build packages from engineering standard §5.5.3.
+
+1. Pull the intended release commit.
+2. Verify the version in `pubspec.yaml`, `APPLICATION_ID` in `linux/CMakeLists.txt`, and the
+   version in packaging files (`snap/snapcraft.yaml`, Flatpak manifest, AppStream `releases`).
+3. Run format, analyze, test, and code generation checks.
+4. Build the Linux release with all hardening flags (commands below).
+5. Run size analysis.
+6. Archive debug symbols.
+7. Package for each declared channel: `.snap`, Flatpak, AppImage, `.deb`, `.rpm`.
+8. Validate the desktop file and AppStream metadata (`desktop-file-validate`,
+   `appstreamcli validate`).
+9. Install and run each package on clean VMs of the main target distros, under Wayland and X11.
+10. Complete the Linux gate (`docs/platform_store_readiness.md` §6), then upload
+    (`snapcraft upload`, Flathub pull request) or publish the files with checksums.
+
+### Linux Build Commands
+
+```bash
+flutter build linux \
+  --release \
+  --dart-define=APP_FLAVOR=prod \
+  --obfuscate \
+  --split-debug-info=build/symbols/linux-prod-<version>/
+
+# Output: build/linux/x64/release/bundle/  (arm64: build/linux/arm64/release/bundle/)
+
+# Snap (from the repo root, with snap/snapcraft.yaml)
+snapcraft
+```
+
+---
+
 ## 12. Distribution Channels
+
+Keep one row per declared channel; delete the rest.
 
 | Channel | Artifact | Audience | Notes |
 |---------|----------|----------|-------|
-| `<channel>` | `<apk/aab/ipa/msix>` | `<audience>` | `<notes>` |
-| `<channel>` | `<artifact>` | `<audience>` | `<notes>` |
+| Google Play | `.aab` | Public | Staged rollout; gate §2 |
+| Direct APK | split `.apk` | `<audience>` | Signed with the release keystore |
+| Apple App Store | `.ipa` | Public | TestFlight first; gate §3 |
+| Microsoft Store | `.msix` / `.msixbundle` (`store: true`) | Public | Gate §4.2 |
+| Windows direct download | signed `.msix` or installer `.exe` | `<audience>` | Code-signed + timestamped; gate §4.3 |
+| Mac App Store | Xcode archive → App Store Connect | Public | Sandbox required; gate §5.2 |
+| macOS direct download | notarized + stapled `.dmg` | `<audience>` | Developer ID; gate §5.3 |
+| Snap Store | `.snap` | Public | edge → beta → stable; gate §6.2 |
+| Flathub | Flatpak (built by Flathub) | Public | Gate §6.3 |
+| Linux direct download | AppImage / `.deb` / `.rpm` | `<audience>` | Checksums over HTTPS; gate §6.4 |
 
 ---
 

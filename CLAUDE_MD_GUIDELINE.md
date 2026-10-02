@@ -4,7 +4,7 @@ Every Flutter project **MUST** have a `CLAUDE.md` file at its root, alongside a 
 
 `CLAUDE.md` is read by Claude Code (and AI coding assistants) automatically at the start of every session in that project. It is the first document the AI inspects, so it MUST be clear, concise where possible, and complete where required. Every Flutter repository MUST maintain both `CLAUDE.md` and `AGENTS.md` at project root as mandatory Core Baseline requirements (**MUST**).
 
-This guideline was built by studying nine existing Flutter `CLAUDE.md` files (Devi, PDFApp, ContactSphere, TextApp, MantraJapaCounter, todo, qr_reader, youtube_shortcut, Authenticator).
+This guideline was built by studying real `CLAUDE.md` files from Flutter apps of different sizes — from small single-screen tools to shipped, security-sensitive apps.
 
 ---
 
@@ -19,15 +19,14 @@ Use this when the project already has (or will have) a full `docs/` folder — `
 - `CLAUDE.md` stays short. It gives identity, commands, and a short rule summary.
 - It **points** to the `docs/` files for the detail. It does not repeat them.
 - Rule: if a detail lives in a `docs/` file, do not copy it into `CLAUDE.md` — link to it.
-- Examples from the reference set: Devi, ContactSphere, Authenticator, PDFApp, TextApp,
-  youtube_shortcut.
+- Typical fit: medium or large apps, shipped apps, security-sensitive apps.
 
 ### Thick self-contained profile
 Use this when the project is small or has **no** `docs/` folder, so `CLAUDE.md` must hold
 everything itself.
 
 - `CLAUDE.md` inlines the detail: schema tables, provider/route tables, full dos-and-don'ts.
-- Examples from the reference set: todo, MantraJapaCounter, qr_reader.
+- Typical fit: small utilities, counters, single-purpose tools.
 
 ### How to choose
 - Has a `docs/` set already, or the project is medium/large → **Thin**.
@@ -53,8 +52,8 @@ Write sections in this order. Skip the ones that do not apply (see the checklist
 11. Testing rules
 12. Dependency constraints
 13. Where things live (project tree)
-14. Workflow rules (plan → approve → log) — from global rules
-15. Communication rules (simple English) — from global rules
+14. Workflow rules (plan → approve → log) — from this guideline set
+15. Communication rules (simple English) — from this guideline set
 16. Dos & Don'ts ("What Claude must always / never do")
 
 ---
@@ -104,10 +103,12 @@ Read it before making any change. <If Thin: See the docs table below for full de
 |-------|-------|
 | App name | <App Name> |
 | Type | <one-line description of what the app does> |
-| Platform(s) | <Android only / Android + Windows / ...> (minSdk <NN>, targetSdk <NN>) |
+| Platforms | <declared platforms from `docs/PROJECT_PROFILE.md` — e.g. Android (minSdk <NN>, targetSdk <NN>), iOS <NN>, Windows, macOS <NN>, Linux> |
+| Stores / channels | <e.g. Google Play, App Store, Microsoft Store, Mac App Store / Developer ID, Snap Store / Flathub> |
+| Languages | <en (template), ...> |
 | Package / org id | <com.example.app> |
-| Flutter SDK | <3.41.x or higher> |
-| Dart SDK | <3.11.x or higher> |
+| Flutter SDK | <project's pinned version — from `flutter --version`> |
+| Dart SDK | <project's pinned version — from `flutter --version`> |
 | State management | <Riverpod / Provider + ChangeNotifier / ...> |
 | Navigation | <go_router / named routes> |
 | Database | <sqflite / sqflite_sqlcipher / shared_preferences / none> |
@@ -127,6 +128,8 @@ Read it before making any change. <If Thin: See the docs table below for full de
 | docs/release_process.md | Building a release, versioning, release checklist |
 | docs/flutter_build_flavors_guide.md | Build config, signing, flavors, Gradle, ProGuard |
 | docs/flutter_project_engineering_standard.md | Any code change — layers, naming, testing |
+| docs/PROJECT_PROFILE.md | Always — platforms, stores, languages, identity, About options |
+| docs/platform_store_readiness.md | Before any release; when touching permissions, entitlements, store-listed behavior |
 | docs/GUIDELINES_MANIFEST.md | The shared Flutter guidelines index |
 
 > If a doc is copied into this project's own `docs/`, the local copy wins over the master.
@@ -174,6 +177,16 @@ flutter build apk --flavor prod --release \
 # Production Play Store bundle
 flutter build appbundle --flavor prod --release \
   --obfuscate --split-debug-info=build/symbols/android-prod-<version>/
+
+# Other declared platforms — keep only the ones this app ships
+flutter build ipa --flavor prod --release \
+  --obfuscate --split-debug-info=build/symbols/ios-prod-<version>/
+flutter build windows --release --dart-define=APP_FLAVOR=prod \
+  --obfuscate --split-debug-info=build/symbols/windows-prod-<version>/
+flutter build macos --release --dart-define=APP_FLAVOR=prod \
+  --obfuscate --split-debug-info=build/symbols/macos-prod-<version>/
+flutter build linux --release --dart-define=APP_FLAVOR=prod \
+  --obfuscate --split-debug-info=build/symbols/linux-prod-<version>/
 ```
 
 > If the app defines flavors, a bare `flutter run` fails — always pass `--flavor`.
@@ -197,6 +210,8 @@ flutter build appbundle --flavor prod --release \
 - Keystore file: <path>. Alias: <alias>. Keep at least one offline backup.
 - Create `android/key.properties` (gitignored — never commit).
 - `.gitignore` must include: `key.properties`, `*.jks`, `*.keystore`, `build/symbols/`.
+- Other platforms: <Apple certificates/profiles, Windows code-signing certificate, notarization
+  credentials> live outside the repo (`guideline.md` §2.5). Never commit them.
 
 ---
 
@@ -209,29 +224,30 @@ flutter build appbundle --flavor prod --release \
 
 ---
 
-## Localization rules   <!-- mandatory for every app: English, Malayalam, Sanskrit -->
+## Localization rules   <!-- mandatory for every app -->
 
-- This app ships three languages: **English (`en`), Malayalam (`ml`), Sanskrit (`sa`)**. Every
-  feature and every screen works in all three.
+- Declared languages (from `docs/PROJECT_PROFILE.md`): **<English (`en`, template), ...>**. Every
+  feature and every screen works in every declared language.
 - All user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations` — never a raw string
-  literal in a widget.
-- `l10n.yaml` (project root) and all three ARB files (`app_en.arb`, `app_ml.arb`, `app_sa.arb`)
-  must exist. Run `flutter gen-l10n` after editing any `.arb` file.
-- Every new key goes into **all three** files with a real translation. Never leave the English
-  value sitting in `app_ml.arb` or `app_sa.arb`.
+  literal in a widget (even in a single-language app).
+- `l10n.yaml` (project root) and one ARB file per declared language (`app_<code>.arb`) must exist.
+  Run `flutter gen-l10n` after editing any `.arb` file.
+- Every new key goes into **every** declared language's file with a real translation. Never leave
+  the template-language value sitting in another language's file.
 - Every ARB key needs an `@key` description entry in the template file.
-- **Sanskrit means Sanskrit, not Hindi in Devanagari.** No Hindi copulas/postpositions/verb endings
-  (`है`, `करें`, `नहीं`, `सेटिंग्स`), no nukta letters. Use the glossary in the engineering standard
-  §8.5 and flag anything you are unsure of for human review.
-- `supportedLocales` is `en`, `ml`, `sa`, and the Sanskrit Material/Cupertino fallback delegates are
-  registered (§8.3.1) — Flutter ships no Sanskrit framework translation. Format dates and numbers
-  with the `formattingLocale(...)` helper, never `DateFormat(..., 'sa')`.
-- The language is user-selectable in Settings (System default / English / മലയാളം / संस्कृतम्),
-  persisted, and applied without restarting the app.
-- Menu, button, label, tab and tooltip strings stay short in all three languages (§8.6); only
+- Language packs in force: <none / `language_packs/<name>.md` — follow its rules, gates and
+  glossary>. Flag any translation you are unsure of for native-reader review in the change log.
+- `supportedLocales` equals the declared languages; <fallback delegate installed for: `<codes>` /
+  none needed> (§8.3.1). Format dates and numbers with the `formattingLocale(...)` helper (§8.3.2).
+- <If 2+ languages:> The language is user-selectable in Settings (System default + each language
+  by its endonym), persisted, and applied without restarting the app.
+- Menu, button, label, tab and tooltip strings stay short in every declared language (§8.6); only
   `desc…`/`help…`/`empty…`/`error…`/`body…` keys may be long prose.
 - Every icon-only control has a localized `tooltip:` (§7.8).
-- The About screen is data-driven, localized, and ends with the "Made with ❤️ from India" badge.
+- Material and Cupertino come from the `material_ui` / `cupertino_ui` packages (pinned with `^`).
+  Import `package:material_ui/material_ui.dart`, never `package:flutter/material.dart` (§6.1).
+- The About screen is data-driven and localized<; it ends with the signature badge "<badge text>"
+  — only if the project profile enables it>.
 - Literals are allowed only for logs, non-UI exception messages, asset paths, route names, and
   map/JSON keys.
 
@@ -277,7 +293,7 @@ test/                # tests
 
 ---
 
-## Workflow rules (mandatory — from global rules)
+## Workflow rules (mandatory)
 
 Every change follows plan-before-changing and log-after-changing:
 
@@ -319,7 +335,7 @@ test after changes; keep main.dart thin.>
 
 ## 5. Sections you must always keep verbatim in spirit
 
-Two sections come from the user's global rules and must appear in **every** `CLAUDE.md`, both
+Two sections are part of this guideline set's working method and must appear in **every** `CLAUDE.md`, both
 profiles, worded the same in meaning:
 
 - **Workflow rules** — plan → approve → log, with relative repository paths only, no local system
@@ -332,7 +348,7 @@ AI always sees them, even in a Thin file.
 
 ---
 
-## 6. Per-section writing tips (learned from the nine files)
+## 6. Per-section writing tips
 
 - **Read-first banner**: one or two lines. State that the file is auto-loaded and must be read
   before any change. Do not pad it.
@@ -374,11 +390,15 @@ AI always sees them, even in a Thin file.
 - [ ] Workflow rules (plan/approve/log) and simple-English rule are present, inline.
 - [ ] `plans/` and `change_log/` entries use relative paths only and contain zero local system details and zero sensitive data — safe to publish on the internet.
 - [ ] A localization rule is present: all user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations`.
-- [ ] The three mandatory languages are named: English, Malayalam, Sanskrit — with key parity across `app_en.arb`, `app_ml.arb`, `app_sa.arb`.
-- [ ] Localization rules explicitly specify all three: English (`en`), Malayalam (`ml`), and Sanskrit (`sa`). Never drop Sanskrit.
-- [ ] The Sanskrit-not-Hindi rule and the in-app language picker rule are present.
+- [ ] The declared languages are named, matching `docs/PROJECT_PROFILE.md`, with key parity across their ARB files.
+- [ ] Any language pack in force is named, and its key rule is summarized.
+- [ ] With two or more languages: the in-app language picker rule is present.
+- [ ] The declared platforms and stores are named, matching `docs/PROJECT_PROFILE.md`, with build
+      commands for each and a pointer to `docs/platform_store_readiness.md`.
 - [ ] The tooltip rule (every icon-only control) and the short-label rule are present.
-- [ ] The About-screen rule is present, including the "Made with ❤️ from India" badge.
+- [ ] The About-screen rule is present, including the signature badge only if the profile enables it.
+- [ ] No personal data (names, personal emails) is written into the file beyond what the project
+      profile publishes.
 - [ ] Every `<...>` placeholder from the template is replaced or its section deleted.
 - [ ] No `docs/` content is duplicated (Thin) / nothing critical is missing (Thick).
 - [ ] Links point to files that exist (or are planned) in this project.
