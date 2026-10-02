@@ -127,7 +127,7 @@ or any `*_sa.*` asset file. They are reliable Hindi giveaways and make a good gr
 # legitimate Sanskrit roots (e.g. स्थाप्यताम्, स्थानम्) or indeclinables (यथा, तथा, कथा).
 # Word edges: whitespace, quotes, brackets, punctuation, daṇḍa, XML/HTML tag edges (< >),
 # and Markdown marks (* _ ` # | : ; ~ -) so help files in Markdown are checked too.
-PATTERN='(?<=[\s"'\''([{<>।,*_`#|:;~-]|^)(?:था|थे|थी|हो|है|हैं|हूं|और)(?=[\s"'\''\)\]}<>।,.\?!*_`#|:;~-]|$)|करें|करना|करके|रहा|रही|रहे|गया|गयी|चाहिए|नहीं|लेकिन|क्या|कृपया|सेटिंग्स|ऐप|\x{093C}|[\x{0958}-\x{095F}]'
+PATTERN='(?<=[\s"'\''([{<>।,*_`#|:;~-]|^)(?:था|थे|थी|हो|है|हैं|हूं|और)(?=[\s"'\''\)\]}<>।,.\?!*_`#|:;~-]|$)|करें|करना|करके|रहा|रही|रहे|गया|गयी|चाहिए|नहीं|लेकिन|क्या|आपका|आपकी|आपके|हमारा|मेरा|कृपया|सेटिंग्स|ऐप|\x{093C}|[\x{0958}-\x{095F}]'
 
 mapfile -t FILES < <(find . -path '*/build' -prune -o -type f \( \
     -name 'app_sa.arb' -o \

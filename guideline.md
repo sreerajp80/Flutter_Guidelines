@@ -221,17 +221,19 @@ Rules the loader MUST follow:
 - `load()` reads the asset, decodes JSON, and returns `AppConfig.fallback` on **any**
   error (missing asset, bad JSON, wrong shape).
 - `loadAndVerify()` additionally compares the config's `version`/`build` with
-  `package_info_plus` and logs a non-fatal debug note on mismatch.
+  `package_info_plus` and logs a non-fatal `AppLogger.debug` note on mismatch (engineering
+  standard §14; `print` and `debugPrint` are not allowed).
 - The asset loader SHOULD be injectable so tests can supply text without the real bundle.
 
 Reference implementation:
 
 ```dart
+// `my_app` is your Dart package name (pubspec.yaml `name`).
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:my_app/core/config/app_config.dart';
+import 'package:my_app/core/logging/app_logger.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'app_config.dart';
 
 class ConfigService {
   static const String assetPath = 'assets/config/app_config.json';
@@ -258,8 +260,9 @@ class ConfigService {
       final info = packageInfo ?? await PackageInfo.fromPlatform();
       final mismatch =
           info.version != config.version || info.buildNumber != config.build;
-      if (mismatch && kDebugMode) {
-        debugPrint(
+      if (mismatch) {
+        // AppLogger.debug prints nothing in production builds.
+        AppLogger.debug(
           'ConfigService: version/build in app_config.json '
           '(${config.version}+${config.build}) does not match the build '
           '(${info.version}+${info.buildNumber}).',
@@ -350,13 +353,12 @@ turns it on, and fixes its exact wording, in the About section of `docs/PROJECT_
 
 When the badge is enabled, these rules apply:
 
-- **Identical in every app that enables it** for the same owner. It does not come from
-  `app_config.json`, and once set it MUST NOT be removed, reworded, or replaced per screen or per
-  release without changing the project profile first.
+- **The text comes only from the project profile.** It does not come from `app_config.json`. Do not
+  change or remove it unless the profile changes first.
 - **It is the last element** on the About screen, after the `details` rows, with vertical
   breathing room above it (≥ 24 dp) and safe-area padding below, horizontally centered.
-- **The heart is red** (`Color(0xFFE53935)` or the theme's error/red accent); the
-  surrounding words use the theme's muted foreground
+- **The heart is red `#E53935`**, held in one named design token (engineering standard §6.1),
+  never a colour literal inside `build`. The surrounding words use the theme's muted foreground
   (`Theme.of(context).colorScheme.onSurfaceVariant`) at `bodySmall`/`labelMedium` size.
 - **The words are localized, the heart is not.** The text comes from ARB key
   `madeWithLove`, which contains the `{heart}` placeholder so the same widget paints the heart
@@ -367,8 +369,9 @@ When the badge is enabled, these rules apply:
 
 ARB entries (one pair per declared language — see engineering standard §8):
 
+`lib/l10n/app_en.arb`:
+
 ```json
-// lib/l10n/app_en.arb
 "madeWithLove": "Made with {heart} by <Team>",
 "@madeWithLove": {
   "description": "About-screen signature badge. {heart} is a red heart glyph.",
@@ -378,8 +381,9 @@ ARB entries (one pair per declared language — see engineering standard §8):
 "@madeWithLoveA11y": { "description": "Screen-reader text for the About badge" }
 ```
 
+`lib/l10n/app_<code>.arb` — the same two keys, translated:
+
 ```json
-// lib/l10n/app_<code>.arb — the same two keys, translated
 "madeWithLove": "<translated text with {heart} where the heart goes>",
 "madeWithLoveA11y": "<translated text without the heart>"
 ```
@@ -397,8 +401,6 @@ Reference widget — `lib/widgets/made_with_love.dart`:
 /// when the project profile enables it. Text is localized; the heart is always red.
 class MadeWithLove extends StatelessWidget {
   const MadeWithLove({super.key});
-
-  static const Color _heartColor = Color(0xFFE53935);
 
   @override
   Widget build(BuildContext context) {
@@ -428,7 +430,7 @@ class MadeWithLove extends StatelessWidget {
                   child: Icon(
                     Icons.favorite,
                     size: (base.fontSize ?? 12) * 1.1,
-                    color: _heartColor,
+                    color: AppColors.heart, // design token = Color(0xFFE53935)
                   ),
                 ),
                 TextSpan(text: parts.length > 1 ? parts[1] : '', style: base),
@@ -446,7 +448,7 @@ class MadeWithLove extends StatelessWidget {
 > **Why `WidgetSpan` and not a character.** Rendering the heart as an emoji or text glyph
 > (`❤`) lets OEM system fonts (e.g. on Samsung or Xiaomi devices) override the character with a
 > platform-specific emoji glyph, ignoring the text colour. `WidgetSpan` with `Icon(Icons.favorite)`
-> guarantees an exact vector heart in `#E53935` red on every screen and OS version.
+> guarantees an exact vector heart in the `AppColors.heart` red on every screen and OS version.
 
 
 > **Note on other constants.** This JSON pattern is only for **About-screen** metadata.
@@ -483,9 +485,10 @@ keyAlias=<key alias>
 storeFile=<name>.jks
 ```
 
-`storeFile` is the keystore filename you chose in §2.1 (a path relative to `android/app`
-if Gradle resolves it that way in your project — keep it consistent with your
-`build.gradle`).
+`storeFile` is the keystore filename you chose in §2.1, relative to `android/`. The Gradle
+script resolves both files from the `android/` root project — `rootProject.file("key.properties")`
+and `rootProject.file(storeFile)` (see the `build.gradle.kts` example in
+`flutter_build_flavors_guide.md`, "Android Signing Configuration", Step 4).
 
 ### 2.3 Never commit secrets
 
@@ -510,7 +513,7 @@ Every production build MUST be built using `--release`, `--obfuscate`, and `--sp
 2. **`--obfuscate`**: Scrambles Dart class, method, and field identifiers into meaningless symbols within `libapp.so`, preventing trivial static analysis and decompilation of proprietary app logic.
 3. **`--split-debug-info=<path>`**: Strips and extracts the symbol table into a separate directory outside the APK. **Mandatory** when `--obfuscate` is enabled; without archived symbol files, crash stack traces from production cannot be decoded.
 4. **`--split-per-abi`** (for APKs): Builds separate native binaries per CPU architecture (`arm64-v8a`, `armeabi-v7a`, `x86_64`) rather than an oversized "fat" universal APK.
-5. **`appbundle`** (for Google Play): Builds an Android App Bundle (`.aab`), allowing Google Play to serve device-optimized APKs and leverage Google Play App Signing and Play Integrity protection.
+5. **`appbundle`** (for Google Play): Builds an Android App Bundle (`.aab`), from which Google Play serves device-optimized APKs and signs them with Play App Signing.
 
 #### Ready-to-use production build examples
 
@@ -521,7 +524,7 @@ Every production build MUST be built using `--release`, `--obfuscate`, and `--sp
 flutter build apk \
   --release \
   --obfuscate \
-  --split-debug-info=build/symbols/android-release/ \
+  --split-debug-info=build/symbols/android-<version>/ \
   --split-per-abi
 ```
 
@@ -530,7 +533,7 @@ flutter build apk \
 flutter build apk `
   --release `
   --obfuscate `
-  --split-debug-info=build/symbols/android-release/ `
+  --split-debug-info=build/symbols/android-<version>/ `
   --split-per-abi
 ```
 *Output artifacts:* `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`, `app-armeabi-v7a-release.apk`, etc.
@@ -542,7 +545,7 @@ flutter build apk `
 flutter build appbundle \
   --release \
   --obfuscate \
-  --split-debug-info=build/symbols/android-release/
+  --split-debug-info=build/symbols/android-<version>/
 ```
 
 **PowerShell (Windows):**
@@ -550,7 +553,7 @@ flutter build appbundle \
 flutter build appbundle `
   --release `
   --obfuscate `
-  --split-debug-info=build/symbols/android-release/
+  --split-debug-info=build/symbols/android-<version>/
 ```
 *Output artifact:* `build/app/outputs/bundle/release/app-release.aab`
 
@@ -562,7 +565,7 @@ flutter build apk \
   --flavor prod \
   --release \
   --obfuscate \
-  --split-debug-info=build/symbols/android-prod/ \
+  --split-debug-info=build/symbols/android-prod-<version>/ \
   --split-per-abi
 ```
 
@@ -572,7 +575,7 @@ flutter build apk `
   --flavor prod `
   --release `
   --obfuscate `
-  --split-debug-info=build/symbols/android-prod/ `
+  --split-debug-info=build/symbols/android-prod-<version>/ `
   --split-per-abi
 ```
 *Output artifacts:* `build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk`, etc.
@@ -585,7 +588,7 @@ flutter build appbundle \
   --flavor prod \
   --release \
   --obfuscate \
-  --split-debug-info=build/symbols/android-prod/
+  --split-debug-info=build/symbols/android-prod-<version>/
 ```
 
 **PowerShell (Windows):**
@@ -594,11 +597,17 @@ flutter build appbundle `
   --flavor prod `
   --release `
   --obfuscate `
-  --split-debug-info=build/symbols/android-prod/
+  --split-debug-info=build/symbols/android-prod-<version>/
 ```
 *Output artifact:* `build/app/outputs/bundle/prodRelease/app-prod-release.aab`
 
-> **Symbol Archive Reminder**: Always archive `build/symbols/` immediately after every production build to a secure backup. Without it, production crash stack traces are permanently unreadable.
+`<version>` is the full `pubspec.yaml` version, e.g. `1.4.0+27` (one folder per release; the
+pattern is `build/symbols/<platform>-<flavor>-<version>/`, without `-<flavor>` when the app has
+no flavors).
+
+> **Symbol archive reminder**: right after every production build, copy the symbols folder to a
+> secure archive **outside the repository**. Without it, production crash stack traces are
+> permanently unreadable.
 
 ### 2.5 Signing on the other platforms
 
@@ -712,7 +721,7 @@ Rules:
       (Java 17 minimum), pinned in the project's own files — not copied from a guide or typed
       from memory; `android/app/build.gradle.kts` uses `kotlin { compilerOptions { } }`, not
       `kotlinOptions` (**MUST**, engineering standard §5.3).
-- [ ] Material and Cupertino come from `material_ui` / `cupertino_ui`, pinned with `^`; no
+- [ ] Material and Cupertino come from `material_ui` / `cupertino_ui`, with a caret (`^`) constraint; no
       `package:flutter/material.dart` or `package:flutter/cupertino.dart` imports remain
       (**MUST**, engineering standard §6.1).
 - [ ] Menu / label / button / tab text is within the length budget in every declared language

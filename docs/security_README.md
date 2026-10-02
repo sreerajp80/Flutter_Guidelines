@@ -57,7 +57,7 @@ These sections must be decided and written **before writing any code**, because 
 | 🟡 Soon | **§9 Logging Policy** | Before writing `AppLogger` — the policy shapes what the logger is allowed to emit |
 | 🟡 Soon | **§10 Platform Controls** | Android FLAG_SECURE, iOS app-switcher overlay — decide before building the first sensitive screen |
 | 🟡 Soon | **§13 Data Retention & Purge** | Before writing your Settings screen — the "Delete all data" action must be implemented, not bolted on later |
-| 🟢 Later | **§12 OWASP Top 10** | Fill in and verify before every production release |
+| 🟢 Later | **§12 OWASP Top 10** | Fill in and verify before every production release (MUST for sensitive-data apps, SHOULD otherwise) |
 | 🟢 Later | **§14 Backup / Import / Export** | Fill when those flows are designed |
 | 🟢 Later | **§15 Security Testing** | Fill as the test suite grows |
 | 🟢 Later | **§16 Incident Response** | Fill before first public release |
@@ -131,14 +131,9 @@ Every time a new sensitive screen is added, a new permission is required, or a s
 
 ---
 
-## How the five documents work together
+## How this fits with the other documents
 
-| Document | Answers |
-|----------|---------|
-| `flutter_project_engineering_standard.md` | *How* should all Flutter code be written? Universal rules for every project. |
-| `flutter_build_flavors_guide.md` | *How* exactly do flavors wire into each platform's native build system? |
-| `architecture.md` | *What* did this specific project decide? Tier, packages, schema, routes, signing strategy. |
-| `security.md` | *What* does this specific project protect? What is sensitive, what is never logged, how is data encrypted? |
-| `release_process.md` | *How* does this specific project ship? The exact commands, the checklist, the evidence trail. |
-
-`security.md` sits at the **constraint layer**: it does not describe the system, it describes what the system is forbidden from doing. The engineering standard says *use a logger*; `security.md` says *and never log these fields*. `architecture.md` says *use sqflite*; `security.md` says *and never put sensitive data in `SharedPreferences`*. `release_process.md` says *build with `--obfuscate`*; `security.md` says *and verify `android:debuggable=false` in the merged manifest before shipping*. The other four documents tell you what to build and how to ship it; `security.md` tells you what the result is not allowed to expose.
+`README.md` lists every document in the guideline set and which ones apply to an app, by profile.
+In short: the **references** (engineering standard, flavors guide, store gates, `guideline.md`) say
+*how* to build and ship; the app's filled-in **templates** in `docs/` (`PROJECT_PROFILE.md`,
+`architecture.md`, `security.md`, `release_process.md`) record *what this app decided*.

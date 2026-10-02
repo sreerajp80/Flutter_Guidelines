@@ -18,14 +18,17 @@ docs/guidelines/
    git submodule add <REPOSITORY_URL> docs/guidelines
    ```
 3. Copy `docs/guidelines/PROJECT_PROFILE_TEMPLATE.md` to `docs/PROJECT_PROFILE.md` and fill it in
-   (platforms, stores, languages, identity, About options).
+   (platforms, stores, languages, identity, About options). Copy the other templates
+   (`architecture.md`, `security.md`, `release_process.md`) into `docs/` and create the rest of
+   the baseline set (`DOCS_FOLDER_GUIDELINE.md` §6).
 4. Reference it from the app's mandatory root `CLAUDE.md` and `AGENTS.md` (e.g. "Follow the guidelines listed in
    `docs/GUIDELINES_MANIFEST.md`, starting with `docs/guidelines/AI_AGENT_START_HERE.md`.").
 5. Open the documents at the relative paths below to read the guidelines.
 
-> **Master vs. local copy.** The paths below point to the **submodule** copies. If a document has
-> instead been copied directly into this app's own `docs/` folder, the **local copy wins** for that app;
-> use the submodule path only when there is no local copy.
+> **Templates vs. references.** Four files are **templates**: copy them into this app's `docs/`
+> folder and fill them in — `PROJECT_PROFILE_TEMPLATE.md` (as `PROJECT_PROFILE.md`),
+> `architecture.md`, `security.md`, `release_process.md`. For these, the **local copy wins**.
+> Every other file is a **reference**: never copy it; read it at the submodule path below.
 
 ## Core documents
 
@@ -70,9 +73,12 @@ to what `docs/PROJECT_PROFILE.md` declares.
 
 | Profile | Applies to | Documents in force |
 |---|---|---|
-| `Core Baseline` | Every app | Root `CLAUDE.md` (via `CLAUDE_MD_GUIDELINE.md`, **MUST**); Root `AGENTS.md` (via `AGENTS_MD_GUIDELINE.md`, **MUST**); `docs/PROJECT_PROFILE.md` (**MUST**); `guideline.md`; Core Baseline rules of `flutter_project_engineering_standard.md`; language packs for declared languages; `architecture.md`; `DOCS_FOLDER_GUIDELINE.md` |
-| `Production App Extension` | Apps shipped to real users / QA / stores | The above **plus** `platform_store_readiness.md` (declared channels), `release_process.md`, `flutter_build_flavors_guide.md` (if using flavors), and the Production sections of the engineering standard |
-| `Sensitive Data Extension` | Apps handling secrets, PII, health, finance, or local encrypted stores | The above **plus** `security.md` and the Sensitive Data sections of the engineering standard |
+| `Core Baseline` | Every app | Root `CLAUDE.md` (via `CLAUDE_MD_GUIDELINE.md`, **MUST**); Root `AGENTS.md` (via `AGENTS_MD_GUIDELINE.md`, **MUST**); the 9 baseline `docs/` files, including `PROJECT_PROFILE.md`, `architecture.md`, `security.md` and `release_process.md` (`DOCS_FOLDER_GUIDELINE.md` §6, **MUST**); `guideline.md`; Core Baseline rules of `flutter_project_engineering_standard.md`; language packs for declared languages |
+| `Production App Extension` | Apps shipped to real users / QA / stores | The above **plus** `platform_store_readiness.md` (declared channels), the full `release_process.md`, `flutter_build_flavors_guide.md` (if using flavors), and the Production sections of the engineering standard |
+| `Sensitive Data Extension` | Apps handling secrets, PII, health, finance, or local encrypted stores | The above **plus** the full `security.md` and the Sensitive Data sections of the engineering standard |
+
+`security.md` and `release_process.md` exist in every app; an app outside the matching profile
+keeps them short and says so at the top.
 
 ## Where to start
 
@@ -80,7 +86,7 @@ to what `docs/PROJECT_PROFILE.md` declares.
 - **Writing / maintaining project root `CLAUDE.md` & `AGENTS.md` (MUST)** — follow `CLAUDE_MD_GUIDELINE.md` and `AGENTS_MD_GUIDELINE.md`.
 - **Starting a new app** — fill in `PROJECT_PROFILE_TEMPLATE.md`, then read `guideline.md` and `flutter_project_engineering_standard.md`.
 - **Structuring project `docs/` files** — follow `DOCS_FOLDER_GUIDELINE.md`.
-- **Designing one app's structure** — fill in `architecture.md`.
+- **Designing one app's structure** — fill in `docs/architecture.md` (copied from the template).
 - **Setting up build flavors** — see `flutter_build_flavors_guide.md`.
-- **Publishing to a store** — pass `platform_store_readiness.md`, then follow `release_process.md`.
-- **Handling sensitive data** — fill in `security.md`.
+- **Publishing to a store** — pass `platform_store_readiness.md`, then follow `docs/release_process.md`.
+- **Handling sensitive data** — fill in `docs/security.md` in full.

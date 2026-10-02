@@ -36,8 +36,8 @@ These apply to every declared public distribution channel.
   the App Store, the Mac App Store, the Snap Store (snap name) or Flathub.
 - **Versioning**: `pubspec.yaml` `version: X.Y.Z+N` is the single source. The build number `N`
   strictly increases on every upload to any store and is never reused, even for a rejected build.
-- **Privacy policy**: a public, reachable, app-specific URL. Required by Google Play, the App
-  Store and the Microsoft Store for most apps; strongly recommended everywhere. Link it from the
+- **Privacy policy**: a public, reachable, app-specific URL. Required by Google Play for every app,
+  and by the App Store and the Microsoft Store for almost every app; strongly recommended everywhere. Link it from the
   About screen (`guideline.md` §1.6).
 - **Data disclosure** matches reality — Play Data safety, Apple App Privacy, Microsoft Store
   privacy declaration, Flathub/Snap permissions. Include what bundled SDKs and plugins collect.
@@ -93,7 +93,7 @@ and `release_process.md` §9.
   breaking the in-app language picker (engineering standard §8.1).
 - **Play App Signing** MUST be enabled *(one-time)*. Keep the upload key backed up offline; losing
   the upload key is recoverable through Play support, losing a pre-App-Signing release key is not.
-- Signing config points at `android/key.properties` (see `docs/guideline.md` §2) and is **never**
+- Signing config points at `android/key.properties` (see `docs/guidelines/guideline.md` §2) and is **never**
   committed.
 - `flutter build appbundle --release --obfuscate --split-debug-info=...` — all three flags, always.
 - Upload the native debug symbols (`build/symbols/`) to Play so crash traces de-obfuscate, and
@@ -107,8 +107,9 @@ and `release_process.md` §9.
   access, exact alarms, accessibility service, SMS/call log, background location, camera/microphone
   in the background, `QUERY_ALL_PACKAGES`.
 - Foreground services declare a `foregroundServiceType` and a use-case declaration in the console.
-- `android:debuggable=false`, `android:allowBackup` decided deliberately, `usesCleartextTraffic=false`
-  (`release_process.md` §6.4, §6.5).
+- `android:debuggable=false` and `usesCleartextTraffic=false`. `android:allowBackup=false` is
+  MUST under the Sensitive Data Extension; other apps choose deliberately and record the choice in
+  `docs/security.md` §10 (`release_process.md` §6.4, §6.5).
 - No accidental `android:exported="true"` (`release_process.md` §6.7).
 - Ads, payments, and analytics SDKs are declared where the console asks for them.
 
@@ -162,6 +163,8 @@ and `release_process.md` §9.
 ---
 
 ## 3. Apple App Store (iOS)
+
+Applies when the App Store is a declared channel for iOS. Build commands: `release_process.md` §10.
 
 ### 3.1 Account and identity
 
@@ -243,6 +246,9 @@ the app only.
 
 ## 4. Windows — Microsoft Store and direct download
 
+Applies when Windows is a declared platform. §4.1 always applies; then §4.2 and/or §4.3 for the
+declared channels. Build commands: `release_process.md` §11.
+
 ### 4.1 Common to both
 
 - App metadata in `windows/runner/Runner.rc` and real app icon (engineering standard §5.5.1, §17.5).
@@ -285,6 +291,9 @@ the app only.
 ---
 
 ## 5. macOS — Mac App Store and Developer ID direct download
+
+Applies when macOS is a declared platform. §5.1 always applies; then §5.2 and/or §5.3 for the
+declared channels. Build commands: `release_process.md` §11A.
 
 ### 5.1 Common to both
 
@@ -356,6 +365,9 @@ be signed, notarized and stapled.
 ---
 
 ## 6. Linux — Snap Store, Flathub, and direct packages
+
+Applies when Linux is a declared platform. §6.1 always applies; then §6.2, §6.3 and/or §6.4 for
+the declared channels. Build commands: `release_process.md` §11B.
 
 ### 6.1 Common to all channels
 

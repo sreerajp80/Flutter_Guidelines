@@ -255,15 +255,17 @@ crashes in release builds that never appear in debug.
 Recommended sequence in `main()`:
 
 1. `WidgetsFlutterBinding.ensureInitialized()`
-2. Platform-specific FFI or native bindings (e.g. `sqfliteFfiInit()` for Windows/Linux desktop)
-3. Secure storage or key material bootstrap
-4. Database initialization and schema migration
-5. App config / flavor loading
-6. Logging infrastructure initialization
+2. Logging infrastructure initialization (`AppLogger.init()`, section 14.2) and the global error
+   handlers (section 11.1). Flavor values are compile-time constants (`AppFlavorConfig`,
+   section 5.2), so nothing has to load first. Every later step can now log its failures.
+3. Platform-specific FFI or native bindings (e.g. `sqfliteFfiInit()` for Windows/Linux desktop)
+4. Secure storage or key material bootstrap
+5. Database initialization and schema migration
+6. App config loading (`ConfigService`, `guideline.md` §1) and the saved app language (8.4)
 7. App lifecycle observer registration
 8. `runApp(...)`
 
-Document the actual sequence in `docs/architecture.md` for the project.
+Document the actual sequence in `docs/architecture.md` §5 for the project.
 
 Each initialization step MUST handle its own failure gracefully and surface a safe error state
 rather than crashing silently.
@@ -272,8 +274,12 @@ rather than crashing silently.
 
 ## 5. Environment And Build Configuration
 
-This section is optional for `Core Baseline` projects and applies fully under
-`Production App Extension`.
+Which parts apply:
+
+- **Every app**, for its declared platforms: 5.3 Toolchain Requirements (including 5.3.1),
+  5.4 iOS deployment target and UIScene, and 5.5 Desktop Build Setup.
+- **When the app uses flavors**: 5.1, 5.2, and the flavor parts of 5.4 and 5.5.
+- **`Production App Extension`**: 5.6 Artifact Selection.
 
 ### 5.1 When Flavors Are Required
 
@@ -295,9 +301,9 @@ order. This shape is required because Flutter handles the flavor signal differen
 platform target:
 
 1. `APP_FLAVOR` — a custom, non-reserved name. This is what desktop builds (Windows, Linux,
-   macOS) pass via `--dart-define=APP_FLAVOR=<value>`, because Flutter does not currently
-   accept `--flavor` for those targets and `FLUTTER_APP_FLAVOR` cannot be set via
-   `--dart-define` (see below).
+   macOS) pass via `--dart-define=APP_FLAVOR=<value>`. Windows and Linux do not accept
+   `--flavor`; macOS accepts it only with matching Xcode schemes (5.5.2), so desktop builds
+   always use `APP_FLAVOR`. `FLUTTER_APP_FLAVOR` cannot be set via `--dart-define` (see below).
 2. `FLUTTER_APP_FLAVOR` — the framework-owned name. The Flutter tool injects this
    automatically as a compile-time define whenever `--flavor` is passed to `flutter run` or
    `flutter build`. This is the path used on Android and iOS.
@@ -361,7 +367,7 @@ otherwise desktop builds have no way to communicate the flavor.
 | Platform | Pattern | Why |
 |----------|---------|-----|
 | Android, iOS | `--flavor <name>` only | Flutter auto-injects `FLUTTER_APP_FLAVOR`; passing `--dart-define=FLUTTER_APP_FLAVOR=...` fails the build. |
-| Windows, Linux, macOS desktop | `--dart-define=APP_FLAVOR=<name>` only | `--flavor` is not accepted on these targets; the reserved `FLUTTER_APP_FLAVOR` name cannot be used via dart-define. |
+| Windows, Linux, macOS desktop | `--dart-define=APP_FLAVOR=<name>` | Windows and Linux do not accept `--flavor`; on macOS it needs Xcode schemes, so `APP_FLAVOR` is the one rule for all desktops. The reserved `FLUTTER_APP_FLAVOR` name cannot be used via dart-define. |
 
 ```bash
 # Android / iOS — --flavor only
@@ -378,7 +384,7 @@ flutter build linux --release --dart-define=APP_FLAVOR=prod
 
 Native Android and iOS flavor names SHOULD stay aligned with the Dart flavor value.
 
-### 5.3 Android Flavor Setup
+#### Android Product Flavors
 
 When Android flavors are used, the project SHOULD define product flavors in
 `android/app/build.gradle.kts` (Kotlin DSL is the default for new projects since Flutter 3.41;
@@ -401,7 +407,9 @@ android {
 }
 ```
 
-#### Toolchain Requirements
+Full signing and resource wiring: `flutter_build_flavors_guide.md`, "Android Flavor Setup".
+
+### 5.3 Toolchain Requirements (Every App)
 
 This standard does not pin tool versions. The rules are:
 
@@ -443,10 +451,10 @@ Since Flutter 3.47 the Android toolchain is AGP 9+ / Gradle 9+, so these rules a
   an injected `ExecOperations` instead.
 - **R8 full mode is the default** since AGP 8.0. This is more aggressive about removing
   seemingly-unused classes — make ProGuard keep rules deliberate (see
-  `docs/flutter_build_flavors_guide.md` ProGuard section).
+  `docs/guidelines/flutter_build_flavors_guide.md` ProGuard section).
 
 Full `settings.gradle.kts` and `build.gradle.kts` examples are in
-`docs/flutter_build_flavors_guide.md` ("Android Toolchain Baseline").
+`docs/guidelines/flutter_build_flavors_guide.md` ("Android Toolchain Baseline").
 
 #### Upgrading An Existing App To A New Flutter Release
 
@@ -469,8 +477,8 @@ Do the upgrade as its own change, with no feature work mixed in:
 
 - `dart fix --apply --code=migrate_design_widgets` moves Material and Cupertino imports to
   `material_ui` / `cupertino_ui` (see 6.1). Plain `dart fix --apply` does **not** run it.
-  Replace any `material_ui: any` / `cupertino_ui: any` the tool wrote with a pinned `^`
-  version.
+  Replace any `material_ui: any` / `cupertino_ui: any` the tool wrote with a caret (`^`)
+  constraint on the current version.
 - Android moves to AGP 9 / Gradle 9: replace `kotlinOptions { }` with
   `kotlin { compilerOptions { } }`, and any `project.exec { }` with `ExecOperations`.
 - iOS minimum becomes 15 and macOS minimum becomes 12 (`ios/Podfile`, Xcode).
@@ -497,9 +505,7 @@ Required actions under `Production App Extension`:
 - Document any dependency that has not yet shipped a 16 KB-aligned release as a release-blocker
   in `architecture.md §21 Known Risks`.
 
-### 5.4 iOS Flavor Setup
-
-When iOS flavors are used, each flavor requires a separate Xcode scheme and xcconfig file pair.
+### 5.4 iOS Setup (Deployment Target, UIScene, Flavors)
 
 #### iOS Deployment Target And UIScene Migration (Flutter ≥ 3.47)
 
@@ -527,39 +533,22 @@ When iOS flavors are used, each flavor requires a separate Xcode scheme and xcco
   the full migration steps. Test on iOS 26 simulator/device before the next App Store
   submission.
 
-#### Xcode Scheme And xcconfig
+#### iOS Flavors (Xcode Build Configurations And Schemes)
 
-Directory structure:
+Rules when the app uses iOS flavors (step-by-step setup: `flutter_build_flavors_guide.md`,
+"iOS Flavor Setup"):
 
-```text
-ios/
-|-- Flutter/
-|   |-- dev/
-|   |   |-- Debug.xcconfig
-|   |   `-- Release.xcconfig
-|   `-- prod/
-|       |-- Debug.xcconfig
-|       `-- Release.xcconfig
-```
-
-Each xcconfig file should set the bundle identifier and display name override:
-
-```
-// ios/Flutter/dev/Debug.xcconfig
-#include "Generated.xcconfig"
-FLUTTER_TARGET=lib/main.dart
-BUNDLE_ID_SUFFIX=.dev
-DISPLAY_NAME=MyApp Dev
-```
-
-In Xcode, create one scheme per flavor:
-- `dev` scheme: uses `Debug.xcconfig` for run, `Release.xcconfig` for archive.
-- `prod` scheme: uses `prod/Release.xcconfig` for archive and store submission.
-
-Each flavor SHOULD have its own `Info.plist` overrides for `CFBundleIdentifier` and
-`CFBundleDisplayName` using `$(BUNDLE_ID_SUFFIX)` and `$(DISPLAY_NAME)` variables.
-
-Provisioning profiles MUST be set per scheme. Do not share production profiles with dev builds.
+- Flutter maps `--flavor <name>` to an Xcode **scheme** named `<name>` and to **build
+  configurations** named `Debug-<name>`, `Profile-<name>` and `Release-<name>`. All of them MUST
+  exist; schemes on the plain `Debug` / `Release` configurations do not work.
+- Set `PRODUCT_BUNDLE_IDENTIFIER` and the display name per build configuration (Build Settings).
+  `Info.plist` reads them through `$(PRODUCT_BUNDLE_IDENTIFIER)` and a build variable such as
+  `$(FLAVOR_APP_NAME)`; it never hard-codes an id.
+- Map every new configuration in `ios/Podfile` (`project 'Runner', { 'Debug-dev' => :debug, … }`)
+  and run `pod install`.
+- Never set `FLUTTER_APP_FLAVOR` in Xcode or an xcconfig file (see 5.2).
+- Provisioning profiles MUST be set per configuration. Do not share production profiles with dev
+  builds.
 
 ### 5.5 Desktop Build Setup (Windows, macOS, Linux)
 
@@ -567,9 +556,8 @@ This section applies to each desktop platform the project declares. The shared r
 then one sub-section per platform (5.5.1 Windows, 5.5.2 macOS, 5.5.3 Linux). Store and
 direct-download release gates for each are in `platform_store_readiness.md`.
 
-Desktop targets do not use Android product flavors and do not currently accept the
-Flutter `--flavor` argument. Environment separation is achieved through
-`--dart-define=APP_FLAVOR=<value>` at build time, read by the `AppFlavorConfig` pattern from
+Desktop targets do not use Android product flavors. Environment separation is achieved through
+`--dart-define=APP_FLAVOR=<value>` at build time (5.2), read by the `AppFlavorConfig` pattern from
 section 5.2. The dart-define name MUST be `APP_FLAVOR` (or any other non-reserved name) and
 MUST NOT be `FLUTTER_APP_FLAVOR` — that name is owned by the framework and any attempt to
 set it via `--dart-define` fails the build.
@@ -593,10 +581,9 @@ void main() async {
 ```
 
 **Window constraints** — set a minimum window size to prevent layouts breaking at small sizes.
-This is the concise `setMinimumSize` form; `docs/flutter_build_flavors_guide.md` shows the
-equivalent `WindowOptions` + `waitUntilReadyToShow` form (which also sets the initial size and
-centres the window). Both configure the same `window_manager`; pick one per project. The flavors
-guide is the canonical desktop-setup reference.
+This section is the single reference for desktop setup; the flavors guide links here. If you also
+want an initial size and a centred window, use `WindowOptions` with
+`windowManager.waitUntilReadyToShow(...)` instead of the calls below.
 
 ```dart
 // In main() after WidgetsFlutterBinding.ensureInitialized() and before runApp.
@@ -795,12 +782,13 @@ Since Flutter 3.47, Material and Cupertino ship as standalone `pub.dev` packages
 deprecation in the next stable release.
 
 - Every app MUST depend on `material_ui` (and `cupertino_ui` if it uses any Cupertino
-  widget or the Cupertino localization delegate), pinned with a `^` constraint:
+  widget or the Cupertino localization delegate), with a caret (`^`) constraint on the current
+  version from pub.dev:
 
   ```yaml
   dependencies:
-    material_ui: ^1.5.0     # Example — pin the current line at project start.
-    cupertino_ui: ^1.1.1    # Only if Cupertino widgets or delegates are used.
+    material_ui: ^<current>     # current version from pub.dev at project start
+    cupertino_ui: ^<current>    # only if Cupertino widgets or delegates are used
   ```
 
 - New code MUST import `package:material_ui/material_ui.dart` /
@@ -809,7 +797,7 @@ deprecation in the next stable release.
   `package:flutter/services.dart` and `package:flutter/foundation.dart` are unchanged.
 - Migrate existing code with `dart fix --apply --code=migrate_design_widgets`. The `--code`
   part is required; plain `dart fix --apply` does not run this migration. If the tool adds
-  `material_ui: any`, replace it with a pinned `^` version.
+  `material_ui: any`, replace it with a caret (`^`) constraint.
 - Code samples in these guidelines that omit imports assume the `material_ui` import.
 
 ### 6.2 Widget Structure
@@ -948,8 +936,7 @@ Under `Production App Extension`:
 - Layouts SHOULD also be tested at 600 dp width (small tablet) if the app targets tablets.
 - Route definitions SHOULD be centralized.
 - Deep links, if supported, SHOULD have integration coverage.
-- Every tap target MUST be at least 48 × 48 dp on mobile.
-- Every tap target on desktop MUST be at least 32 × 32 dp.
+- Tap-target sizes: see 7.1 (they apply to every app, not only production apps).
 
 ---
 
@@ -1027,11 +1014,10 @@ user-facing features.
 
 Under `Production App Extension`:
 
-- Test critical flows with **TalkBack** on Android before each release.
-- Test critical flows with **Narrator** on Windows desktop before each release.
-- Test with **VoiceOver** on iOS and macOS if those platforms are supported.
+- Before each release, test critical flows with the screen reader of **each declared platform**:
+  **TalkBack** (Android), **VoiceOver** (iOS, macOS), **Narrator** (Windows), **Orca** (Linux).
 - At minimum: app navigation, primary data entry flow, and error states must be fully operable
-  under TalkBack/Narrator.
+  with each of them.
 
 ### 7.7 Compliance Verification Methods
 
@@ -1208,9 +1194,9 @@ Add to `pubspec.yaml`:
 dependencies:
   flutter_localizations:
     sdk: flutter
-  material_ui: ^1.5.0   # Example — Material widgets and GlobalMaterialLocalizations (6.1).
-  cupertino_ui: ^1.1.1  # Example — Cupertino widgets and GlobalCupertinoLocalizations.
-  intl: ^0.20.2   # Example — pin the current line at project start and update deliberately.
+  material_ui: ^<current>   # Material widgets and GlobalMaterialLocalizations (6.1)
+  cupertino_ui: ^<current>  # Cupertino widgets and GlobalCupertinoLocalizations
+  intl: ^<current>          # take each <current> from pub.dev; never type a version from memory
 ```
 
 `flutter_localizations` is still required: `GlobalWidgetsLocalizations` and the generated
@@ -1234,12 +1220,11 @@ template-arb-file: app_en.arb   # app_<template language>.arb
 output-localization-file: app_localizations.dart
 output-class: AppLocalizations
 nullable-getter: false
-synthetic-package: false
 ```
 
-`synthetic-package: false` writes the generated file into your `lib/` tree (preferred for
-import clarity); leaving the default `true` writes it into the synthetic `flutter_gen` package.
-Pick one and document the choice.
+Since Flutter 3.32 the generated files always go into the source tree (next to the ARB files, or
+into `output-dir` if you set one). The old synthetic `package:flutter_gen` no longer exists: import
+`AppLocalizations` from `lib/l10n/` and do not add a `synthetic-package` line.
 
 **Android App Bundle language splitting MUST be disabled** when the app has an in-app language
 picker (two or more declared languages), in `android/app/build.gradle.kts` (or `build.gradle`):
@@ -1340,8 +1325,8 @@ Generate typed accessors:
 flutter gen-l10n
 ```
 
-Use in code via `AppLocalizations.of(context)!.appTitle` (or `AppLocalizations.of(context).appTitle`
-when `nullable-getter: false` is set). Never use raw string literals for user-visible text.
+Use in code via `AppLocalizations.of(context).appTitle` (no `!`, because `l10n.yaml` sets
+`nullable-getter: false`). Never use raw string literals for user-visible text.
 
 **Adding a language later.** Because the strings are already externalized, this is a small,
 mechanical job:
@@ -1603,9 +1588,11 @@ app-bar titles, list-row labels, form-field labels, switch/checkbox labels, dial
 
 | Language | Target | Hard limit |
 |---|---|---|
-| English (and other Latin-script languages) | 1–2 words | 20 characters |
-| Any other declared language | 1–2 words | 22 characters, unless its language pack sets another limit |
-| CJK languages | 1 word | 10 characters |
+| Latin script (English, Spanish, …) | 1–2 words | 20 characters |
+| CJK (Chinese, Japanese, Korean) | 1 word | 10 characters |
+| Any other script (Devanagari, Arabic, Malayalam, …) | 1–2 words | 22 characters |
+
+A language pack MAY set a different limit for its languages; the pack wins.
 
 **How characters are counted.** A character is a visible character (a grapheme cluster), not a
 code unit: a vowel sign or virama belongs to the letter before it. Count using Dart's
@@ -1982,15 +1969,10 @@ profile in debug mode.
 
 ### 10.3 List And Grid Performance
 
-- MUST use `ListView.builder`, `GridView.builder`, or `SliverList` with a
-  `SliverChildBuilderDelegate` for any list that is unbounded or can grow without a known upper
-  limit. The eager-children variants (`ListView(children: [...])`) build every child at layout
-  time regardless of visibility; on an unbounded list this is a correctness failure, not just a
-  performance concern.
-- For lists with a known, fixed upper bound of roughly 20 items or fewer, `ListView(children:
-  [...])` is acceptable. Beyond that count, consider `ListView.builder` — the decision point is
-  whether all children being built simultaneously causes a measurable frame-time impact on a
-  mid-range device.
+- A list that is unbounded, or that can grow past **20 items**, MUST use `ListView.builder`,
+  `GridView.builder`, or `SliverList` with a `SliverChildBuilderDelegate`. The eager-children
+  variant (`ListView(children: [...])`) builds every child at once, whether visible or not.
+- A list with a fixed, known size of 20 items or fewer MAY use `ListView(children: [...])`.
 - Consider `itemExtent` on `ListView.builder` when all items have the same height. This eliminates
   per-item layout measurement and can significantly improve scrolling on long lists. Benchmark
   before committing to a fixed extent, as it precludes variable-height items.
@@ -2093,6 +2075,7 @@ unhandled errors in release builds crash silently with no user feedback.
 ```dart
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppLogger.init(); // section 4.5, step 2 — logging first, then the handlers
 
   // 1. Framework errors (widget build, layout, and paint errors).
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -2234,15 +2217,15 @@ dart run build_runner watch --delete-conflicting-outputs
 Always use `--delete-conflicting-outputs`. Without it, stale generated files from a previous run
 cause confusing type errors.
 
-Add to `pubspec.yaml` under `dev_dependencies` (example versions only — check `pub.dev`,
-pin to the current major at project start, and update deliberately):
+Add to `pubspec.yaml` under `dev_dependencies` (replace each `<current>` with the current version
+from pub.dev at project start, and update deliberately):
 
 ```yaml
 dev_dependencies:
-  build_runner: ^2.5.0
-  freezed: ^2.5.0          # If using freezed models
-  json_serializable: ^6.9.0 # If using json annotation
-  riverpod_generator: ^2.6.0 # If using riverpod code gen
+  build_runner: ^<current>
+  freezed: ^<current>             # if using freezed models (also freezed_annotation)
+  json_serializable: ^<current>   # if using json annotation
+  riverpod_generator: ^<current>  # if using riverpod code gen
 ```
 
 ### 12.2 Generated File Policy
@@ -2287,7 +2270,7 @@ part 'todo.freezed.dart';
 part 'todo.g.dart';
 
 @freezed
-class Todo with _$Todo {
+abstract class Todo with _$Todo {
   const factory Todo({
     required int id,
     required String title,
@@ -2303,7 +2286,8 @@ class Todo with _$Todo {
 Rules:
 - Freezed models MUST be immutable. Use `copyWith` for all mutations.
 - Do not add mutable fields or `late` properties to freezed classes.
-- Freezed union types (sealed classes) MUST use `when` or `maybeWhen` exhaustively at call sites.
+- Freezed classes are declared `abstract class` (single constructor) or `sealed class` (union).
+- Handle union types with an exhaustive Dart `switch` (pattern matching), not `when` / `maybeWhen`.
 
 ---
 
@@ -2442,7 +2426,7 @@ implementation using the `logger` package. Adapt it to your project's requiremen
 
 ```yaml
 dependencies:
-  logger: ^2.4.0
+  logger: ^<current>  # current version from pub.dev
 ```
 
 ```dart
@@ -2453,11 +2437,15 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 class AppLogger {
-  static late Logger _logger;
+  /// Console-only logger used until [init] finishes, so a log call (for example
+  /// from the global error handlers) never fails during startup.
+  static Logger _logger = Logger(
+    level: AppFlavorConfig.instance.isDev ? Level.trace : Level.info,
+    printer: SimplePrinter(),
+  );
 
-  /// Call once during app startup, before any log call.
-  /// `getApplicationCacheDirectory()` is async, so logger initialization
-  /// cannot happen at static-field initialization time.
+  /// Call once at startup (section 4.5, step 2). It is async because
+  /// `getApplicationCacheDirectory()` is async; it swaps in the full logger.
   static Future<void> init() async {
     final cacheDir = await getApplicationCacheDirectory();
     final logFile = File(p.join(cacheDir.path, 'app.log'));
@@ -2490,9 +2478,9 @@ class AppLogger {
 }
 ```
 
-`AppLogger.init()` MUST run during the `main()` initialization sequence (section 4.5, step 6
-"Logging init") and before any other code calls `AppLogger`. Calling a logging method before
-`init` returns will throw `LateInitializationError`.
+`AppLogger.init()` MUST run at step 2 of the `main()` initialization sequence (section 4.5), right
+after `WidgetsFlutterBinding.ensureInitialized()`. Until it finishes, log calls go to the console
+only; they never throw.
 
 ### 14.3 Logging Rules
 
@@ -2576,7 +2564,9 @@ financial data, recovery codes, or local encrypted stores.
 
 ### 15.3 OWASP Mobile Top 10 Compliance Checklist
 
-Before each production release, verify the following OWASP Mobile Top 10 controls:
+Under the `Sensitive Data Extension` this checklist is a MUST: sign it off in `docs/security.md`
+§12 before every production release. Other production apps SHOULD complete it and may mark items
+`n/a`. Verify the following controls:
 
 | ID | Risk | Control |
 |----|------|---------|
@@ -2598,8 +2588,8 @@ before release sign-off.
 
 Every app that stores user-generated data MUST define and implement a retention policy.
 
-- Document in `docs/security.md`: what data is stored, how long it is retained, and what triggers
-  deletion.
+- Document in `docs/security.md` §13 (every app has this file — `DOCS_FOLDER_GUIDELINE.md` §6):
+  what data is stored, how long it is retained, and what triggers deletion.
 - Provide a user-accessible "Delete all data" action that removes all local app data including
   the database, log files, cached files, and secure storage entries.
 - If the app supports account deletion or reset, verify the purge is complete: no residual files
@@ -2625,9 +2615,9 @@ Under `Sensitive Data Extension`:
 - Run `dart format .` before commit.
 - New work MUST NOT introduce analyzer issues.
 - Repositories SHOULD aim for zero analyzer warnings overall.
-- Start from `package:flutter_lints/flutter.yaml` (pin the current major as of
-  project start in `dev_dependencies` — `^6.0.0` at the time of writing) and add stricter rules
-  deliberately. Pinning the major prevents the lint set silently shifting under your CI
+- Start from `package:flutter_lints/flutter.yaml` (add it to `dev_dependencies` with a caret
+  constraint on the current version from pub.dev) and add stricter rules deliberately. The caret
+  keeps the major version fixed, which prevents the lint set silently shifting under your CI
   when a contributor upgrades dependencies.
 
 Recommended baseline additions:
@@ -2985,7 +2975,7 @@ jobs:
     runs-on: macos-latest
     steps:
       # checkout + flutter setup; unsigned check build in CI, signed build on release
-      - run: flutter build ios --release --no-codesign
+      - run: flutter build ios --flavor prod --release --no-codesign
           --obfuscate
           --split-debug-info=build/symbols/ios-prod-${{ env.APP_VERSION }}/
 
@@ -3019,8 +3009,10 @@ Signing material (keystore, Apple certificates and profiles, Windows code-signin
 store API keys) is provided to CI only as **encrypted CI secrets**, decoded at build time, and
 never written to the repository or to logs.
 
-The `<platform>-<version>/` subdirectory is required so that symbols from different releases
-do not collide; `release_process.md §6.1` and `security.md §8.1` both depend on this layout.
+The symbols folder is always `build/symbols/<platform>-<flavor>-<version>/` (drop `-<flavor>` when
+the app has no flavors; `<version>` is the full `pubspec.yaml` version, e.g. `1.4.0+27`), so symbols
+from different releases never collide. `release_process.md` §6.1 and `security.md` §8.1 use the
+same layout. Drop `--flavor prod` and `APP_FLAVOR` from the jobs if the app has no flavors.
 `${{ env.APP_VERSION }}` is the GitHub Actions form — substitute the equivalent for your CI.
 
 Additional recommended steps:
@@ -3062,7 +3054,7 @@ echo "Pre-commit checks passed."
   naming, and the `.gitignore` rules: see `guideline.md §2`.)
 - Local machine configuration files containing credentials or machine-specific paths.
 - `.dart_tool/` directory (machine-local build state).
-- Debug symbol archives (`*.symbols/` from `--split-debug-info`).
+- Debug symbols from `--split-debug-info` (they live under `build/symbols/`, covered by `build/`).
 
 ### 20.3 Usually Commit
 
@@ -3076,7 +3068,7 @@ echo "Pre-commit checks passed."
 Add to `.gitignore` regardless of whether generated Dart source is committed:
 
 ```gitignore
-# Build output
+# Build output (also holds the debug symbols in build/symbols/)
 build/
 *.apk
 *.aab
@@ -3097,9 +3089,6 @@ build/
 *.p8
 *.mobileprovision
 *.provisionprofile
-
-# Debug symbols
-*.symbols/
 
 # Machine-local state
 .dart_tool/
@@ -3130,7 +3119,9 @@ build/
 | `docs/GUIDELINES_MANIFEST.md` | Portable pointer manifest indexing shared Flutter guidelines |
 | `docs/PROJECT_PROFILE.md` | Platforms, stores, languages, identity and About options (1.2.1) |
 | `docs/architecture.md` | Module boundaries, initialization sequence, schema version, major decisions |
-| `docs/release_process.md` | Required for shipped apps |
+| `docs/security.md` | Threat model, data inventory, retention policy; full detail under `Sensitive Data Extension` |
+| `docs/release_process.md` | Release scope and runbook; full detail under `Production App Extension` |
+| The rest of the baseline `docs/` set | `workflow_rules.md`, `dependencies.md`, `project_structure.md`, `implementation_plan.md`, `implementation_progress.md` (`DOCS_FOLDER_GUIDELINE.md` §6) |
 | `PRIVACY.md` or hosted privacy policy | Required for any app on a public store (`platform_store_readiness.md`) |
 | `plans/` | One plan per change — MUST follow the privacy rule in 21.1.1 |
 | `change_log/` | One log per change — MUST follow the privacy rule in 21.1.1 |
@@ -3159,7 +3150,6 @@ Write them as if a stranger will read them. Nothing should reveal the machine th
 ### 21.2 Recommended Documents
 
 - `CHANGELOG.md` for user-facing release history.
-- `docs/security.md` for sensitive-data apps.
 - `docs/adr/` for architecture decision records that are likely to be revisited.
 
 ### 21.3 README Must Include
@@ -3205,7 +3195,7 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Put all user-visible strings in `lib/l10n/*.arb` and read them through `AppLocalizations` (section 8.2) — never a raw string literal in a widget.
 - Add every new key to the ARB file of **every declared language**, with a real translation in each (sections 8.2, 8.7). Never leave the template-language value as a placeholder in another language's file.
 - Follow every language pack that applies (section 8.5). Never substitute a related language for a declared one. Flag any translation you are not confident about in the change log as "needs native-reader review".
-- Keep `action…`, `label…`, `title…`, `tab…`, `nav…` and `tooltip…` strings within the length budget in 8.6; only `desc…`/`help…`/`empty…`/`error…`/`body…` keys may be long.
+- Keep `action…`, `label…`, `title…`, `tab…`, `nav…` and `tooltip…` strings within the length budget in 8.6; only `desc…`/`help…`/`empty…`/`error…`/`body…`/`aboutDetail…` keys may be long.
 - Give every icon-only control a localized `tooltip:` (section 7.8).
 - Keep the About screen data-driven and localized (`guideline.md` §1.6). If the project profile enables the signature badge, never remove or reword it (`guideline.md` §1.7).
 - Only touch platform folders (`android/`, `ios/`, `windows/`, `macos/`, `linux/`, `web/`) for declared platforms. When adding a feature that needs a permission, entitlement, or capability, add it on **every** declared platform (Android manifest permission, iOS/macOS `Info.plist` usage string and entitlement, MSIX capability, Snap plug / Flatpak permission) — and nowhere it is not needed.
@@ -3213,7 +3203,7 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Do not use `kDebugMode` or `kReleaseMode` as a substitute for application flavor when the
   project has explicit environments.
 - Always add `const` to constructors and widget instantiations where possible.
-- Never use `ListView(children: [...])` for lists that can have more than 20 items.
+- Use a builder (`ListView.builder` etc.) for any list that is unbounded or can exceed 20 items (10.3).
 - Never call heavy synchronous work on the main isolate; use `compute()` or `Isolate`.
 - Always use `AppLogger` (or the project's logging service), never `print` or `debugPrint`.
 - Always add a `Semantics` label to custom interactive widgets.
@@ -3279,7 +3269,8 @@ A task is complete only when all applicable items are true.
 - Sensitive data handling was reviewed against the security section.
 - Logging was reviewed for protected data exposure.
 - Backup, import, export, migration, or recovery paths were tested if touched.
-- OWASP checklist items affected by the change were re-verified.
+- OWASP checklist items affected by the change were re-verified (the checklist is a MUST under
+  this extension — 15.3).
 
 ---
 

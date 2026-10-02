@@ -84,11 +84,11 @@ this order wrong causes platform crashes that only appear in release builds.
 | Step | Code / Call | Notes |
 |------|-------------|-------|
 | 1 | `WidgetsFlutterBinding.ensureInitialized()` | Always first |
-| 2 | FFI / platform binding init | e.g. `sqfliteFfiInit()` on Windows/Linux |
-| 3 | Secure storage / key bootstrap | Before any encrypted read |
-| 4 | Database open + migrate | Schema version N applied |
-| 5 | Flavor config load | `AppFlavorConfig.instance` |
-| 6 | Logging init | Logger configured before any log calls |
+| 2 | Logging init + global error handlers | `AppLogger.init()`; flavor comes from compile-time `AppFlavorConfig` |
+| 3 | FFI / platform binding init | e.g. `sqfliteFfiInit()` on Windows/Linux |
+| 4 | Secure storage / key bootstrap | Before any encrypted read |
+| 5 | Database open + migrate | Schema version N applied |
+| 6 | App config + saved language | `ConfigService`, `LocaleController` |
 | 7 | Lifecycle observer registration | `WidgetsBinding.instance.addObserver(...)` |
 | 8 | `runApp(...)` | |
 
@@ -126,8 +126,8 @@ If the app is **fully offline**:
   - Or open the merged manifest XML at
     `build/app/intermediates/merged_manifests/prodRelease/AndroidManifest.xml` and search for `INTERNET`.
   - Or in Android Studio: Build → Analyze APK → select the APK → open `AndroidManifest.xml`.
-- All dependencies have been audited for transitive network activity (see `docs/dependency_audit.md`
-  or the audit log in the release checklist).
+- All dependencies have been audited for transitive network activity (record the result in
+  `docs/dependencies.md` and in the release evidence, `docs/release_process.md` §14).
 - The integration test suite includes an offline scenario test that runs with airplane mode
   simulated to verify no accidental network calls are attempted.
 
@@ -378,7 +378,9 @@ Record the decisions that are likely to be questioned later.
 ## 22. Related Documents
 
 - `README.md`
-- `docs/flutter_project_engineering_standard.md`
-- `docs/flutter_build_flavors_guide.md`
-- `docs/release_process.md` (required for shipped apps)
-- `docs/security.md` (required for sensitive-data apps)
+- `docs/guidelines/flutter_project_engineering_standard.md`
+- `docs/guidelines/flutter_build_flavors_guide.md`
+- `docs/PROJECT_PROFILE.md`
+- `docs/release_process.md` (full detail for shipped apps)
+- `docs/security.md` (full detail for sensitive-data apps)
+- `docs/guidelines/platform_store_readiness.md` (shipped apps)

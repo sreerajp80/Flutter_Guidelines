@@ -79,7 +79,7 @@ Example `assets/config/app_config.json` for this profile:
   "description": {
     "en": "One-line description of what the app does.",
     "ml": "ആപ്പ് എന്തു ചെയ്യുന്നു എന്നതിന്റെ ഒറ്റവരി വിവരണം.",
-    "sa": "एतत् अनुप्रयोगः किं करोति इति एकपङ्क्तिवर्णनम्।"
+    "sa": "एषः अनुप्रयोगः किं करोति इति एकपङ्क्तिवर्णनम्।"
   },
   "version": "1.0.0",
   "build": "1",
@@ -93,7 +93,7 @@ Example `assets/config/app_config.json` for this profile:
     "license": {
       "en": "All libraries used are open source.",
       "ml": "ഉപയോഗിച്ച എല്ലാ ലൈബ്രറികളും ഓപ്പൺ സോഴ്സ് ആണ്.",
-      "sa": "सर्वाणि प्रयुक्तानि पुस्तकालयानि मुक्तस्रोतानि सन्ति।"
+      "sa": "सर्वे प्रयुक्ताः पुस्तकालयाः मुक्तस्रोतसः सन्ति।"
     },
     "privacyPolicy": "https://<your-domain>/pdfapp/privacy",
     "aiUsed": {

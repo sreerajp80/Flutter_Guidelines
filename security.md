@@ -1,9 +1,11 @@
 # Security
 
-Use this document when the repository handles secrets, protected personal data, health data,
+Fill in this document in full when the repository handles secrets, protected personal data, health data,
 financial data, private files, or any local encrypted store.
 
-If the app is not security-sensitive, keep this file short and document that decision explicitly.
+Every app has this file (`DOCS_FOLDER_GUIDELINE.md` §6). If the `Sensitive Data Extension` does not
+apply, say so at the top, keep the file short, and fill in at least §10 (platform choices such as
+`allowBackup`), §11 (permissions) and §13 (data retention).
 
 ---
 
@@ -124,8 +126,10 @@ Document only the design, not the secrets.
 All production release builds MUST be compiled with:
 
 ```bash
---obfuscate --split-debug-info=build/symbols/<platform>-<version>/
+--obfuscate --split-debug-info=build/symbols/<platform>-<flavor>-<version>/
 ```
+
+The folder pattern is defined in `release_process.md` §6.1.
 
 Obfuscation is a useful hardening step, not only a build optimization. It renames Dart class and
 method names in the compiled binary to meaningless identifiers, raising the cost of casual
@@ -147,7 +151,7 @@ The debug symbol files produced by `--split-debug-info` MUST be:
 ### 8.2 R8 / ProGuard
 
 Android release builds run R8 code shrinking. Verify `proguard-rules.pro` keeps classes accessed
-via reflection. See `docs/flutter_build_flavors_guide.md` for the required rules.
+via reflection. See `docs/guidelines/flutter_build_flavors_guide.md` for the required rules.
 
 ### 8.3 Debuggable Flag
 
@@ -189,8 +193,8 @@ and inject code.
 ### Android
 
 - `android:allowBackup`: `<true/false and why>`
-  - For sensitive-data apps: set to `false` or use `android:fullBackupContent` to explicitly
-    exclude sensitive directories.
+  - Under the Sensitive Data Extension it MUST be `false`, or `android:fullBackupContent` MUST
+    exclude every sensitive directory. Other apps record their choice and the reason here.
 - `android:fullBackupContent`: `<value>`
 - Screenshot protection:
   - Android: set `FLAG_SECURE` on the window to prevent screenshots and screen recording.
@@ -198,7 +202,7 @@ and inject code.
     `getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE)`.
   - Apply on all screens showing sensitive data; remove on non-sensitive screens if UX requires.
 - `android:debuggable`: MUST be `false` in release builds (verify per section 8.3).
-- Root detection: `<if any — e.g. SafetyNet / Play Integrity API>`
+- Root / integrity detection: `<none, or Play Integrity API>`
 
 ### iOS
 
@@ -209,7 +213,7 @@ and inject code.
     `sceneWillResignActive(_:)` on your `UIWindowSceneDelegate` (or via
     `FlutterSceneLifeCycleDelegate` in a plugin).
   - Legacy `AppDelegate`-only projects: apply the overlay in `applicationWillResignActive`.
-  - See `docs/flutter_build_flavors_guide.md` for the UIScene migration mechanics.
+  - See `docs/guidelines/flutter_build_flavors_guide.md` for the UIScene migration mechanics.
 - Keychain usage: `<usage — e.g. flutter_secure_storage uses Keychain automatically>`
 - Required privacy descriptions in `Info.plist`:
   - `<NSCameraUsageDescription if applicable>`
@@ -223,7 +227,7 @@ and inject code.
 - Application data directory access: store sensitive files in
   `getApplicationSupportDirectory()`, not a shared or user-accessible directory.
 - Verify no sensitive data is written to Windows Event Log.
-- MSIX capabilities: only the ones the app uses (`docs/platform_store_readiness.md` §4.1).
+- MSIX capabilities: only the ones the app uses (`docs/guidelines/platform_store_readiness.md` §4.1).
 - Direct-download builds are code-signed and timestamped; never ship an unsigned installer.
 
 ### macOS
@@ -237,7 +241,7 @@ and inject code.
   Documents or Desktop unless the user chose the location.
 - Required privacy descriptions in `Info.plist` for camera, microphone, etc., as on iOS.
 - Direct-download builds are Developer ID signed, notarized and stapled
-  (`docs/platform_store_readiness.md` §5.3).
+  (`docs/guidelines/platform_store_readiness.md` §5.3).
 
 ### Linux
 
@@ -274,7 +278,8 @@ Permission review rules:
 
 ## 12. OWASP Mobile Top 10 Compliance
 
-Review and sign off each item before every production release.
+Review and sign off each item before every production release. This is a MUST under the
+`Sensitive Data Extension` and a SHOULD for other production apps (engineering standard §15.3).
 
 | ID | Risk | Control | Status |
 |----|------|---------|--------|
@@ -327,9 +332,8 @@ Define what data is stored, how long it lives, and what triggers deletion.
 
 - Android: app data is deleted on uninstall by default unless `android:allowBackup=true`
   and a cloud backup exists. Verify backup config explicitly.
-- iOS: Keychain items persist across uninstall on iOS unless explicitly deleted or unless
-  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` access group is used. For sensitive keys,
-  delete Keychain items on first launch after reinstall detection (compare stored install UUID
+- iOS: Keychain items persist across uninstall, whatever accessibility class they use. For
+  sensitive keys, delete Keychain items on first launch after reinstall detection (compare stored install UUID
   against a newly generated one).
 - Windows: `flutter_secure_storage` writes to Windows Credential Manager, which persists across
   app reinstall. Implement a first-run detection and credential purge if a clean uninstall

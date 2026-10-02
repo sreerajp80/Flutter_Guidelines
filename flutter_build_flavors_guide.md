@@ -16,19 +16,9 @@ the examples here as a starting point and document their deviations in `docs/arc
 
 ## Toolchain Prerequisites
 
-Toolchain rules:
-
-- **Use the latest stable Flutter** (and the Dart SDK that ships with it).
-- **Android: use the AGP, Kotlin Gradle Plugin (KGP) and Gradle versions that Flutter
-  generates.** `flutter create` writes them for new projects, and `flutter upgrade` plus the
-  Flutter migrator update them in existing projects. Do NOT hand-pick or hand-downgrade them.
-- **Each project pins its own versions** in its own files: `android/settings.gradle.kts`
-  (AGP, KGP), `android/gradle/wrapper/gradle-wrapper.properties` (Gradle), `pubspec.lock`,
-  and the CI image. This guide does not pin them for you.
-- **Look up versions, never guess them.** AI agents and contributors MUST read the current
-  versions from `flutter --version` and the project files above before writing or changing
-  build files. Never write a version from memory — memory is usually one or more releases
-  behind, and that is how old AGP versions and `kotlinOptions { }` blocks come back.
+The toolchain rules (latest stable Flutter, the AGP / KGP / Gradle versions it generates, each
+project pins its own versions, never type a version from memory) are in the engineering standard
+§5.3. This guide does not repeat them.
 
 These minimums are hard limits — a build below them fails:
 
@@ -52,7 +42,8 @@ behind; always use what your own Flutter generates.
 | Kotlin Gradle Plugin (KGP) | 2.4.0 |
 | Gradle (wrapper) | 9.3.1 |
 
-If any of these is missing, fix it before adopting any flavor configuration below — the
+If the project is below any minimum in the first table, fix that before adopting any flavor
+configuration below — the
 flavor mechanics work, but the resulting build will fail at submission time.
 
 ---
@@ -100,8 +91,9 @@ Flutter ≥ 3.19 owns the `FLUTTER_APP_FLAVOR` compile-time environment variable
   Do not use `FLUTTER_APP_FLAVOR` as the dart-define name on Windows — the same framework
   reservation applies even when `--flavor` is absent.
 
-- Linux and macOS desktop use the same `APP_FLAVOR` pattern as Windows. See "macOS Desktop
-  Flavor Setup" and "Linux Desktop Flavor Setup" below for side-by-side installs.
+- Linux and macOS desktop use the same `APP_FLAVOR` pattern as Windows. (macOS also accepts
+  `--flavor` when matching Xcode schemes exist, but `APP_FLAVOR` stays the rule.) See "macOS
+  Desktop Flavor Setup" and "Linux Desktop Flavor Setup" below for side-by-side installs.
 
 ### Reading The Flavor At Runtime
 
@@ -123,7 +115,7 @@ const flavor = String.fromEnvironment('FLUTTER_APP_FLAVOR', defaultValue: 'prod'
 Option 1 is the canonical accessor in current Flutter. Option 2 is still valid and is
 useful when the same `AppFlavorConfig` must also support desktop builds that pass a
 custom `APP_FLAVOR` dart-define — see the desktop fallback pattern in
-`docs/flutter_project_engineering_standard.md §5.2`.
+`docs/guidelines/flutter_project_engineering_standard.md §5.2`.
 
 ---
 
@@ -286,9 +278,9 @@ keyAlias=myapp
 keyPassword=your-key-password
 ```
 
-`storeFile` is the keystore filename you chose in Step 1, as a path relative to the
-directory Gradle resolves it from (see the `build.gradle.kts` example in Step 4, which
-loads it via `rootProject.file(...)`). Keep it consistent with `guideline.md §2.2`.
+`storeFile` is the keystore filename you chose in Step 1, relative to `android/`. Step 4 resolves
+it with `rootProject.file(...)`, and the root project of the Android build is the `android/`
+folder (`guideline.md` §2.2).
 
 For CI environments, set these values as environment variables and write the file from a
 pre-build step rather than committing it.
@@ -322,7 +314,8 @@ before adopting this pattern.
 
 ```kotlin
 // ─── Signing ─────────────────────────────────────────────────────────────────
-val keystorePropertiesFile = rootProject.file("android/key.properties")
+// rootProject is the android/ folder, so both paths below are relative to android/.
+val keystorePropertiesFile = rootProject.file("key.properties")
 
 android {
     // ... namespace, compileSdk, defaultConfig, etc. ...
@@ -334,7 +327,7 @@ android {
                 props.load(keystorePropertiesFile.inputStream())
                 keyAlias      = props.getProperty("keyAlias")
                 keyPassword   = props.getProperty("keyPassword")
-                storeFile     = file(props.getProperty("storeFile"))
+                storeFile     = rootProject.file(props.getProperty("storeFile"))
                 storePassword = props.getProperty("storePassword")
             }
         }
@@ -395,7 +388,7 @@ afterEvaluate {
                     "══════════════════════════════════════════════════════════\n" +
                     "  android/key.properties not found.                       \n" +
                     "  Create the file with your release keystore credentials. \n" +
-                    "  See docs/flutter_build_flavors_guide.md                 \n" +
+                    "  See docs/guidelines/flutter_build_flavors_guide.md                 \n" +
                     "  Section: Android Signing Configuration                  \n" +
                     "══════════════════════════════════════════════════════════\n"
                 )
@@ -565,12 +558,6 @@ device-specific downloads from the `.aab`.
 `--target-platform` controls compilation targets but does NOT automatically guarantee ABI-specific
 APKs. Use `--split-per-abi` for separate per-ABI APKs.
 
-> **ABI deprecation note.** Google Play deprecated 32-bit-only `armeabi-v7a` submissions
-> for new apps in 2024 and Flutter dropped `x86` (32-bit) support in 3.27. The minimum
-> modern mobile ABI is `arm64-v8a` plus `x86_64` for emulators. Existing apps may keep
-> `armeabi-v7a` for legacy device coverage; new apps SHOULD ship 64-bit only unless a
-> specific market requires otherwise.
-
 ---
 
 ### 16 KB Page Size Compliance (Mandatory for Play Store)
@@ -666,82 +653,53 @@ release.
 
 ---
 
-### Xcode Scheme And xcconfig Setup
+### Xcode Build Configurations And Schemes
 
-Each flavor requires a separate Xcode scheme and a pair of xcconfig files (Debug and Release).
+Flutter maps `--flavor <name>` to an Xcode **scheme** called `<name>`, which must use **build
+configurations** called `Debug-<name>`, `Profile-<name>` and `Release-<name>`. Plain `Debug` /
+`Release` configurations are not enough. Official reference:
+`docs.flutter.dev/deployment/flavors-ios`.
 
-**Directory structure:**
+**1. Create the build configurations.** Open `ios/Runner.xcworkspace`. In Project → Runner →
+Info → Configurations, duplicate each existing configuration once per flavor:
 
-```text
-ios/
-|-- Flutter/
-|   |-- dev/
-|   |   |-- Debug.xcconfig
-|   |   `-- Release.xcconfig
-|   `-- prod/
-|       |-- Debug.xcconfig
-|       `-- Release.xcconfig
-|-- Runner/
-|   |-- Info.plist
-|   `-- ... (Xcode project files)
-```
+| Flavor | Build configurations |
+|---|---|
+| `dev` | `Debug-dev`, `Profile-dev`, `Release-dev` |
+| `prod` | `Debug-prod`, `Profile-prod`, `Release-prod` |
 
-**`ios/Flutter/dev/Debug.xcconfig`:**
+**2. Create one scheme per flavor.** Product → Scheme → New Scheme, named exactly `dev` and
+`prod`. Edit each scheme so Run uses `Debug-<flavor>`, Profile uses `Profile-<flavor>`, and
+Archive uses `Release-<flavor>`. Tick **Shared** so the schemes are committed.
 
-```
-#include "Generated.xcconfig"
-#include "../../Flutter/Flutter.xcconfig"
-FLUTTER_TARGET=lib/main.dart
-BUNDLE_ID_SUFFIX=.dev
-DISPLAY_NAME=MyApp Dev
-```
+**3. Set identity per build configuration.** In Runner target → Build Settings:
 
-**`ios/Flutter/dev/Release.xcconfig`:**
+| Setting | `*-dev` configurations | `*-prod` configurations |
+|---|---|---|
+| `PRODUCT_BUNDLE_IDENTIFIER` | `com.yourcompany.myapp.dev` | `com.yourcompany.myapp` |
+| `FLAVOR_APP_NAME` (user-defined setting) | `MyApp Dev` | `MyApp` |
 
-```
-#include "Generated.xcconfig"
-#include "../../Flutter/Flutter.xcconfig"
-FLUTTER_TARGET=lib/main.dart
-BUNDLE_ID_SUFFIX=.dev
-DISPLAY_NAME=MyApp Dev
-```
-
-**`ios/Flutter/prod/Release.xcconfig`:**
-
-```
-#include "Generated.xcconfig"
-#include "../../Flutter/Flutter.xcconfig"
-FLUTTER_TARGET=lib/main.dart
-BUNDLE_ID_SUFFIX=
-DISPLAY_NAME=MyApp
-```
-
-The xcconfig files MUST NOT set `DART_DEFINES=FLUTTER_APP_FLAVOR%3D...`. The Flutter tool
-injects `FLUTTER_APP_FLAVOR` automatically from the `--flavor` argument that the Xcode
-scheme passes to `flutter run`/`flutter build`. Setting it again from xcconfig produces the
-same `kernel_snapshot_program` build failure described above.
-
-**In `ios/Runner/Info.plist`**, use the variable references:
+**4. Read them in `ios/Runner/Info.plist`** — never hard-code the id:
 
 ```xml
 <key>CFBundleIdentifier</key>
-<string>com.yourcompany.myapp$(BUNDLE_ID_SUFFIX)</string>
+<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 <key>CFBundleDisplayName</key>
-<string>$(DISPLAY_NAME)</string>
+<string>$(FLAVOR_APP_NAME)</string>
 ```
 
-### Creating Xcode Schemes
+**5. Map the configurations in `ios/Podfile`**, then run `pod install`:
 
-In Xcode:
+```ruby
+project 'Runner', {
+  'Debug-dev' => :debug, 'Profile-dev' => :release, 'Release-dev' => :release,
+  'Debug-prod' => :debug, 'Profile-prod' => :release, 'Release-prod' => :release,
+}
+```
 
-1. Product → Scheme → New Scheme → name it `dev`.
-2. Product → Scheme → New Scheme → name it `prod`.
-3. For the `dev` scheme:
-   - Edit Scheme → Build: set configuration to `Debug`.
-   - Edit Scheme → Run: set configuration to `Debug`.
-   - Edit Scheme → Archive: set configuration to `Release`.
-4. In each scheme's Build Configuration, select the matching xcconfig via
-   Project → Info → Configurations → Expand each configuration → set xcconfig for Runner.
+Do **not** set `DART_DEFINES=FLUTTER_APP_FLAVOR%3D...` in Xcode or in any xcconfig file. The Flutter
+tool injects `FLUTTER_APP_FLAVOR` from `--flavor`; setting it again produces the same
+`kernel_snapshot_program` build failure described above.
 
 ### iOS Run And Build Commands
 
@@ -771,15 +729,15 @@ flutter build ipa --flavor prod --release \
   - Dev: `com.yourcompany.myapp.dev` — development or ad-hoc profile.
   - Prod: `com.yourcompany.myapp` — App Store distribution profile.
 - Never share a production distribution certificate with dev builds.
-- Configure signing in Xcode under Signing & Capabilities, per scheme.
+- Configure signing in Xcode under Signing & Capabilities, per build configuration.
 - `flutter run` uses automatic signing by default; `flutter build ipa` requires an explicit
-  distribution profile configured in Xcode for the prod scheme.
+  distribution profile configured in Xcode for `Release-prod`.
 
 ### iOS Flavor-Specific Assets
 
 Place flavor-specific app icons in `ios/Runner/Assets.xcassets` using an `AppIcon-dev` asset
-catalog set for the dev flavor and `AppIcon` for prod. Reference the correct set in each scheme's
-`Info.plist` via `CFBundleIcons`.
+catalog set for the dev flavor and `AppIcon` for prod. Select the set per build configuration with
+the `ASSETCATALOG_COMPILER_APPICON_NAME` build setting (`AppIcon-dev` for `*-dev`).
 
 ---
 
@@ -797,7 +755,7 @@ is reserved by the Flutter framework and any attempt to set it via `--dart-defin
 name such as `APP_FLAVOR` and have your `AppFlavorConfig` read both names — `APP_FLAVOR`
 first (used on desktop) with a fallback to `FLUTTER_APP_FLAVOR` (auto-injected on
 Android/iOS when `--flavor` is passed). The reference implementation is in
-`docs/flutter_project_engineering_standard.md §5.2`.
+`docs/guidelines/flutter_project_engineering_standard.md §5.2`.
 
 `--dart-define` does not handle all flavor-differentiation needs:
 
@@ -846,7 +804,7 @@ Add to `pubspec.yaml`:
 
 ```yaml
 dev_dependencies:
-  msix: ^3.16.0
+  msix: ^<current>   # current version from pub.dev
 
 msix_config:
   display_name: MyApp
@@ -854,8 +812,8 @@ msix_config:
   identity_name: com.yourcompany.myapp
   publisher: CN=YourPublisherCN
   msix_version: 1.0.0.0
-  logo_path: assets/icons/icon.png
-  capabilities: runFullTrust
+  logo_path: assets/icons/app_icon.png
+  capabilities: internetClient   # only what the app uses; the msix package adds runFullTrust itself
   languages: en-us
   # For Microsoft Store submissions, build a multi-architecture .msixbundle.
   # For sideloading, a single-architecture .msix is sufficient — drop arm64.
@@ -879,58 +837,10 @@ flavor (e.g. `com.yourcompany.myapp.dev`). The simplest approach is a separate
 `pubspec_dev.yaml` that overrides only the `msix_config` block, invoked explicitly in your
 dev build script. Document the chosen approach in `docs/architecture.md §15`.
 
-### Windows-Specific sqflite Initialization
+### Desktop Setup (sqflite, Window Size, Shortcuts)
 
-This is required before any database operation on Windows or Linux desktop. Add it to `main()`
-before `runApp`:
-
-```dart
-import 'dart:io';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  if (Platform.isWindows || Platform.isLinux) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  }
-
-  runApp(const MyApp());
-}
-```
-
-### Window Size Constraints
-
-Prevent the window from being resized to dimensions that break the UI:
-
-```yaml
-# pubspec.yaml
-dependencies:
-  window_manager: ^0.4.0
-```
-
-```dart
-import 'package:window_manager/window_manager.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
-
-  const windowOptions = WindowOptions(
-    size: Size(1024, 768),
-    minimumSize: Size(800, 600),
-    title: 'MyApp',
-    center: true,
-  );
-  await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
-
-  runApp(const MyApp());
-}
-```
+`sqflite` FFI initialization, minimum window size and other desktop setup are not flavor-specific.
+They are described once, in the engineering standard §5.5.
 
 ---
 
@@ -941,7 +851,7 @@ macOS reads the flavor the same way as the other desktops: pass
 only differ in Dart behavior.
 
 When dev and prod must be **installed side by side** or show **different names**, they need
-different bundle ids. Use the iOS pattern (see "Xcode Scheme And xcconfig Setup" above) inside
+different bundle ids. Use the iOS pattern (see "Xcode Build Configurations And Schemes" above) inside
 `macos/`:
 
 ```text
@@ -977,7 +887,7 @@ flutter build macos --release \
   --split-debug-info=build/symbols/macos-prod-<version>/
 ```
 
-Signing, notarization and store upload: `docs/platform_store_readiness.md` §5.
+Signing, notarization and store upload: `docs/guidelines/platform_store_readiness.md` §5.
 
 ---
 
@@ -1015,7 +925,7 @@ flutter build linux --release \
   --split-debug-info=build/symbols/linux-prod-<version>/
 ```
 
-Packaging and store upload: `docs/platform_store_readiness.md` §6.
+Packaging and store upload: `docs/guidelines/platform_store_readiness.md` §6.
 
 ---
 
@@ -1053,8 +963,11 @@ Every production release build MUST be built with:
 
 ```bash
 --obfuscate
---split-debug-info=build/symbols/<platform>-<version>/
+--split-debug-info=build/symbols/<platform>-<flavor>-<version>/
 ```
+
+`<version>` is the full `pubspec.yaml` version (e.g. `1.4.0+27`); drop `-<flavor>` when the app has
+no flavors.
 
 **What `--obfuscate` does:** Dart compiles to native AOT machine code; it is not bytecode and
 does not require decompilation in the way Java or C# do. The `--obfuscate` flag additionally
@@ -1074,8 +987,8 @@ The symbols directory produced by `--split-debug-info` MUST be:
 
 - Stored securely for the lifetime of the released version.
 - Never committed to source control.
-- Archived alongside the release artifact (e.g. in a release artifacts storage bucket or
-  secure folder).
+- Archived alongside the release artifact, **outside the repository** (e.g. in a release
+  artifacts storage bucket or secure folder).
 
 Without the symbols file, crash reports from that release version cannot be decoded. Losing
 it permanently means those crashes are undiagnosable.
@@ -1119,13 +1032,14 @@ To support this workflow, the native projects typically need:
 
 **Windows:**
 - `sqflite_common_ffi` initialization in `main()` for any desktop + sqflite usage.
-- `window_manager` for size constraints.
+- `window_manager` for size constraints (engineering standard §5.5).
 - `msix` package for distribution packaging; use `dart run msix:create` (the deprecated
   `flutter pub run msix:create` will eventually stop working).
 - A documented strategy for MSIX identity and display name differentiation between flavors
   if side-by-side installation is required.
 - For Microsoft Store submission, build a multi-architecture `.msixbundle` (x64 + arm64);
   for sideloading, single-architecture `.msix` is sufficient.
+
 **macOS:**
 - Bundle id, name and copyright in `macos/Runner/Configs/AppInfo.xcconfig` (plus a dev
   xcconfig and scheme if dev and prod install side by side).

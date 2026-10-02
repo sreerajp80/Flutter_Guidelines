@@ -37,7 +37,7 @@ them with `docs/guidelines/` (see `GUIDELINES_MANIFEST.md`).
 | 5 | `language_packs/<name>.md` for each declared language that has one | Mandatory language-specific rules |
 | 6 | `flutter_build_flavors_guide.md` | Only if the app uses flavors or you are touching build files |
 | 7 | `platform_store_readiness.md` | Before any release, and when touching permissions or store-listed behavior |
-| 8 | `release_process.md`, `security.md`, `architecture.md` | Templates — fill in the app's own copies under `docs/` |
+| 8 | `release_process.md`, `security.md`, `architecture.md` | Templates — every app has its own filled-in copy under `docs/`; read that copy, not the template |
 
 The plain-English explainers in `docs/*_README.md` summarize the long documents.
 
@@ -68,8 +68,8 @@ Do these as separate, approved plans; do not jump ahead.
 6. **CI.** Minimum checks (§19.1), then a release build job for every declared platform (§19.2).
 7. **Features.** One plan per feature. Each feature is done only when the Definition of Done
    holds (§23) — tests, analyze clean, every declared language, tooltips, accessibility.
-8. **Release.** Fill in `docs/release_process.md` and `docs/security.md` (if the Sensitive Data
-   Extension applies). Pass the gate for **each declared channel** in
+8. **Release.** Complete `docs/release_process.md` in full, and `docs/security.md` in full if the
+   Sensitive Data Extension applies (both files exist from step 3). Pass the gate for **each declared channel** in
    `platform_store_readiness.md`, then follow the platform's release steps in
    `release_process.md` (§9 Android, §10 iOS, §11 Windows, §11A macOS, §11B Linux).
 

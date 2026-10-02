@@ -10,7 +10,7 @@ It is a **master rulebook** for building any Flutter application to a consistent
 
 It has 24 sections across every dimension of Flutter development. Here is the map:
 
-**Sections 1–4 — Foundations.** How to apply the standard (conformance language: `MUST`/`SHOULD`/`MAY`, three applicability profiles, repository types), nine core principles, when to use Tier 1 (layer-first) vs Tier 2 (feature-first) structure, the state management rules, the canonical Widget → State → Service → Repository → Datasource data flow, and the mandatory `main()` initialization sequence.
+**Sections 1–4 — Foundations.** How to apply the standard (conformance language: `MUST`/`SHOULD`/`MAY`, three applicability profiles, repository types), nine core principles, when to use Tier 1 (layer-first) vs Tier 2 (feature-first) structure, the state management rules, the canonical Widget → State → Service → Repository → Datasource data flow, and the recommended `main()` initialization sequence (logging first, then platform bindings, storage, database, config).
 
 **Sections 5–9 — App-level engineering.** Build flavors and when they are required, the `AppFlavorConfig` pattern, **toolchain requirements (latest stable Flutter and the AGP / KGP / Gradle versions it generates, look up versions instead of guessing, Java 17 minimum, `kotlin { compilerOptions { } }` instead of `kotlinOptions` on AGP 9+, iOS 15 minimum), an upgrade checklist for any new Flutter release (with extra steps when crossing 3.47), Android 16 KB page-size compliance, iOS UIScene lifecycle migration**, desktop setup for Windows (MSIX, Store vs code-signed download), macOS (App Sandbox, entitlements, Developer ID notarization) and Linux (GTK build packages, `APPLICATION_ID`, Snap/Flatpak packaging), and which artifact to ship on each platform. UI/UX baseline: theme tokens (Material 3 default since 3.16), **Material and Cupertino as the standalone `material_ui` / `cupertino_ui` packages (Flutter 3.47) and the `dart fix --apply --code=migrate_design_widgets` migration**, screen-state patterns (loading/empty/success/error), feedback component rules (SnackBar vs AlertDialog vs BottomSheet), animation duration tokens with easing curves, haptic feedback rules, keyboard/scroll behavior, and safe area handling (edge-to-edge enforced on Android 15+ targeting SDK 35+). Accessibility: touch targets, contrast ratios, semantics, **font scaling via `TextScaler` at 1.0×/1.5×/2.0×** (the deprecated `textScaleFactor` API has been replaced), focus and keyboard navigation, screen reader testing, **and a mandatory tooltip on every icon-only control**. Localization: **every app ships the languages it declares in `docs/PROJECT_PROFILE.md`** (strings always in ARB files, even for one language), with an in-app language picker when there are two or more, translation-quality rules, optional **language packs** for languages that need extra rules, and short-label budgets. App lifecycle management with `WidgetsBindingObserver` (with the modern `AppLifecycleListener` alternative for lifecycle-only concerns).
 
@@ -36,7 +36,7 @@ Think of it as three things simultaneously.
 | `Production App Extension` | Apps shipped to real users, QA, or a store |
 | `Sensitive Data Extension` | Apps handling secrets, health, financial, or PII data |
 
-You declare the active profiles in `architecture.md §1`. Rules marked "under Production App Extension" only activate once that profile is declared.
+You declare the active profiles in `docs/PROJECT_PROFILE.md` §2 (and repeat them in `architecture.md` §1). Rules marked "under Production App Extension" only activate once that profile is declared.
 
 ---
 
@@ -48,7 +48,7 @@ The engineering standard is **not a fill-in-the-blanks template**. You do not wr
 
 | Priority | Section | Decision to Make and Record |
 |----------|---------|----------------------------|
-| 🔴 Must | **§1 Profiles** | Declare which profiles apply. Record in `architecture.md §1`. |
+| 🔴 Must | **§1 Profiles** | Declare which profiles apply. Record in `docs/PROJECT_PROFILE.md` §2 and `architecture.md` §1. |
 | 🔴 Must | **§3 Structure** | Choose Tier 1 or Tier 2. Record in `architecture.md §4` with the reason. |
 | 🔴 Must | **§4.1 State management** | Confirm one primary package. Record in `architecture.md §8`. |
 | 🔴 Must | **§4.2 Data flow** | Confirm the canonical chain or document any omitted layer. Record in `architecture.md §9`. |
@@ -87,7 +87,7 @@ The engineering standard is **not a fill-in-the-blanks template**. You do not wr
 
 **Run the dependency audit for offline apps** — Section 16.5. For fully offline apps, `dart pub deps --style=tree` must be run before adding any package. This verifies no transitive HTTP dependency is introduced. Architecturally mandatory, not optional.
 
-**Create `docs/architecture.md` and `docs/security.md`** — Section 21.1 lists these as required documents. Fill out all 🔴 Must sections in both before coding begins.
+**Create the baseline `docs/` set** — Section 21.1 and `DOCS_FOLDER_GUIDELINE.md` §6 list the required documents, including `docs/architecture.md` and `docs/security.md`. Fill out all 🔴 Must sections of `architecture.md` before coding begins.
 
 ---
 
@@ -95,13 +95,13 @@ The engineering standard is **not a fill-in-the-blanks template**. You do not wr
 
 ### How AI uses it
 
-When the standard is placed in `docs/` and referenced in `CLAUDE.md`, an AI coding assistant reads it and gains a complete picture of *how* code should be written — not just what to build.
+When `docs/guidelines/flutter_project_engineering_standard.md` is referenced in `CLAUDE.md`, an AI coding assistant reads it and gains a complete picture of *how* code should be written — not just what to build.
 
 **Structure** — It knows the tier, avoids a second `utils/` folder, and never invents a second state management system.
 
 **Data flow** — It knows Widget → State → Service → Repository → Datasource. It will not put SQL inside a widget or put navigation logic inside a service.
 
-**Init order** — It knows `sqfliteFfiInit()` before database open, database open before `runApp()`. Wrong ordering causes silent release-only crashes; the standard explains why.
+**Init order** — It knows logging starts first, `sqfliteFfiInit()` runs before the database opens, and the database opens before `runApp()`. Wrong ordering causes silent release-only crashes; the standard explains why.
 
 **List rendering** — It knows `ListView(children:[...])` is prohibited for lists over ~20 items. It uses `ListView.builder` with `itemExtent` when item height is fixed.
 
@@ -119,22 +119,22 @@ Without the standard, the AI applies its own defaults — which may be inconsist
 
 ### What you need to do
 
-**Step 1 — Place the standard in your docs folder**
+**Step 1 — Use it from the guidelines submodule (do not copy it)**
 ```
-<project_root>/docs/flutter_project_engineering_standard.md
+<project_root>/docs/guidelines/flutter_project_engineering_standard.md
 ```
 
 **Step 2 — Add a rule to `CLAUDE.md`**
 
 ```
-Rule N: Before writing any code, read docs/flutter_project_engineering_standard.md.
+Rule N: Before writing any code, read docs/guidelines/flutter_project_engineering_standard.md.
         Active profiles: Core Baseline, Production App Extension.
 
   Structure: Follow architecture.md §4 tier. No second state-management system.
              No packages introducing transitive HTTP or network activity.
 
   Code rules (every task):
-  - Never use ListView(children:[...]) for lists over 20 items.
+  - Use ListView.builder for any list that is unbounded or can exceed 20 items.
   - Never use print() or debugPrint(); use AppLogger.
   - Prefer Transform/Opacity over animating layout-affecting properties
     (Padding, SizedBox dimensions, Align factors). Animating layout properties
@@ -142,7 +142,8 @@ Rule N: Before writing any code, read docs/flutter_project_engineering_standard.
   - Never put SQL, encryption, or HTTP knowledge inside a widget.
   - Always add const to constructors and widget instantiations where possible.
   - Always add a Semantics label to custom interactive widgets.
-  - Always use compute() or Isolate for work taking more than ~4 ms.
+  - Move work that can drop a frame (large JSON parsing, crypto on big payloads)
+    off the main isolate with compute() or an Isolate; profile first (§10.5).
 
   Definition of done (every task):
   - flutter analyze clean. Tests added/updated. Generated files current.
@@ -163,18 +164,13 @@ After the AI delivers code, quickly verify: `const` constructors used, `ListView
 
 **Step 5 — The standard is project-level ground truth — not a per-session upload**
 
-Once in `docs/` and referenced in `CLAUDE.md`, every future session reads it automatically alongside `architecture.md` and `security.md`. You do not re-explain it. Per task you indicate which sections are most relevant — this focuses the AI precisely rather than asking it to apply all 24 sections equally to every small change.
+Once referenced in `CLAUDE.md` (at `docs/guidelines/`), every future session reads it alongside `architecture.md` and `security.md`. You do not re-explain it. Per task you indicate which sections are most relevant — this focuses the AI precisely rather than asking it to apply all 24 sections equally to every small change.
 
 ---
 
-## How the five documents work together
+## How this fits with the other documents
 
-| Document | Answers |
-|----------|---------|
-| `flutter_project_engineering_standard.md` | *How* should all Flutter code be written? Universal rules for every project. |
-| `flutter_build_flavors_guide.md` | *How* exactly do flavors wire into each platform's native build system? |
-| `architecture.md` | *What* did this specific project decide? Tier, packages, schema, routes, signing strategy. |
-| `security.md` | *What* does this specific project protect? What is sensitive, what is never logged, how is data encrypted? |
-| `release_process.md` | *How* does this specific project ship? The exact commands, the checklist, the evidence trail. |
-
-All five are needed to write correct code and ship it safely. The engineering standard gives the pattern. The build flavors guide gives the platform mechanics for delivering that pattern through Gradle, Xcode, and `flutter build windows`. `architecture.md` gives the type names and layer locations. `security.md` constrains what the logger inside any given method is allowed to emit. `release_process.md` turns the resulting decisions into the exact reproducible commands and pre-release gates each shipped build must pass through. Referencing all five when asking the AI for a non-trivial implementation gives it everything required to produce code that is correct, consistent with your project, safe, and shippable.
+`README.md` lists every document in the guideline set and which ones apply to an app, by profile.
+In short: the **references** (engineering standard, flavors guide, store gates, `guideline.md`) say
+*how* to build and ship; the app's filled-in **templates** in `docs/` (`PROJECT_PROFILE.md`,
+`architecture.md`, `security.md`, `release_process.md`) record *what this app decided*.

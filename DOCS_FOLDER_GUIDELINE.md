@@ -3,9 +3,6 @@
 This document tells you how to create a file inside a Flutter project's `docs/` folder so that
 every project's documentation looks and works the same way.
 
-It was built by studying the `docs/` folders of nine existing Flutter projects (Devi, PDFApp,
-ContactSphere, TextApp, MantraJapaCounter, todo, qr_reader, youtube_shortcut, Authenticator).
-
 It pairs with [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md) and [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md), which cover how to write the mandatory project-root `CLAUDE.md` and `AGENTS.md`. This one covers the files that live under `docs/`.
 
 ---
@@ -30,17 +27,16 @@ rules below.
 
 ## 2. Local copy vs the submodule — where a doc belongs
 
-Some documents exist both as a shared template in the submodule (`docs/guidelines/…`) and as a
-filled-in local file (`docs/…`). The rule (from `GUIDELINES_MANIFEST.md`) is:
+The guideline set has two kinds of files (see `README.md`, "Templates and references"):
 
-- **The local copy wins.** If the project has its own `docs/architecture.md`, that is the truth
-  for this app; the submodule's `architecture.md` is only the template.
-- **Do not duplicate a submodule doc locally unless you are filling it in for this app.**
-  Blueprint templates (`architecture.md`, `security.md`) are *meant* to be copied down and
-  filled in. Reference docs (`flutter_project_engineering_standard.md`,
-  `flutter_build_flavors_guide.md`) are *not* — link to the submodule copy instead of copying
-  them into `docs/`. (Some older apps copied them locally; do not repeat that for new apps.)
-- When in doubt: **fill in blueprints locally, link to references.**
+- **Templates** — `PROJECT_PROFILE_TEMPLATE.md` (copied as `PROJECT_PROFILE.md`),
+  `architecture.md`, `security.md`, `release_process.md`. Copy them into `docs/` and fill them
+  in. **The local copy wins**: `docs/architecture.md` is the truth for this app; the submodule's
+  `architecture.md` is only the template.
+- **References** — every other file (`guideline.md`, `flutter_project_engineering_standard.md`,
+  `flutter_build_flavors_guide.md`, `platform_store_readiness.md`, the `*_GUIDELINE.md` files,
+  language packs, profiles). **Never copy them** into `docs/`; link to
+  `docs/guidelines/<file>`. Some older apps copied them locally; do not repeat that.
 
 ---
 
@@ -48,6 +44,8 @@ filled-in local file (`docs/…`). The rule (from `GUIDELINES_MANIFEST.md`) is:
 
 - **Case: `snake_case`.** Lowercase, words joined by underscores. Example:
   `release_process.md`, `known_gaps.md`, `implementation_plan.md`.
+- **Two fixed exceptions** keep their upper-case names: `PROJECT_PROFILE.md` and
+  `GUIDELINES_MANIFEST.md`.
 - Older files use `kebab-case` (hyphens), e.g. `security-rules.md`. Those are tolerated — do
   **not** rename them just for style — but **every new file uses `snake_case`.**
 - Name by content, not by date. A `docs/` file describes a lasting part of the app.
@@ -77,7 +75,7 @@ always the same.
 2. **Purpose paragraph.** One short paragraph directly under the title saying what the file is
    and when to read it (e.g. "Read this before changing any security-sensitive code.").
 3. **"Read first" links.** If the reader should open something else first, link it here with a
-   relative path — typically `../.agents/AGENTS.md` (or `../CLAUDE.md`), a sibling doc, and any
+   relative path — typically `../CLAUDE.md` or `../AGENTS.md`, a sibling doc, and any
    relevant `guidelines/…` submodule doc.
 4. **`---` separator**, then **numbered `##` sections.** Number the main sections (`## 1.`,
    `## 2.`, …) and separate major blocks with a `---` rule, matching the existing files.
@@ -125,6 +123,11 @@ When generating or initializing the `docs/` folder for a new Flutter app, **alwa
 
 Together with `GUIDELINES_MANIFEST.md` and the `guidelines/` submodule, these 9 documents form the complete baseline documentation suite required for every new project.
 
+`security.md` and `release_process.md` are filled in **in full** when the Sensitive Data Extension
+or the Production App Extension applies. Otherwise keep them short: state at the top which
+profile is not in force, then fill in only what is true today (for `security.md` at least the data
+retention policy, §13; for `release_process.md` at least §1 Release Scope).
+
 ---
 
 ## 7. Catalog of recognized doc types
@@ -170,10 +173,10 @@ Keep the `docs/` set small and predictable.
 ## 9. Cross-linking rules
 
 - Always use **relative markdown links**, so they work when the repo is cloned anywhere.
-- Link "up" to the mandatory project rules file: `../CLAUDE.md` (or `../.agents/AGENTS.md`).
+- Link "up" to the mandatory project rules files: `../CLAUDE.md` and `../AGENTS.md`.
 - Link "sideways" to siblings: `[architecture.md](architecture.md)`.
-- Link to the submodule when referring to a shared template or reference:
-  `docs/guidelines/security.md`.
+- Link "down" into the submodule for a shared reference:
+  `[engineering standard](guidelines/flutter_project_engineering_standard.md)`.
 - When a short rules file exists alongside a fuller blueprint, the short file should say where
   the full detail lives (e.g. `security_rules.md` → "Full detail is in the Security
   Architecture section of `architecture.md`.").
@@ -184,7 +187,7 @@ Keep the `docs/` set small and predictable.
 
 - [ ] It is **not** `GUIDELINES_MANIFEST.md` and **not** inside `guidelines/` (§1).
 - [ ] Name is `snake_case`, lowercase, descriptive, no date prefix (§3).
-- [ ] It is a filled-in blueprint, not a copied-down reference doc (§2).
+- [ ] It is a filled-in template or a project doc, not a copied-down reference doc (§2).
 - [ ] Starts with an `# H1` title (+ app name for app-specific docs) and a one-paragraph
       purpose (§4).
 - [ ] "Read first" links present where useful; all cross-links are relative (§4, §9).

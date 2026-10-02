@@ -7,11 +7,11 @@ It is a **living release playbook** for your Flutter app. Unlike `architecture.m
 - The version format and how build numbers increment (Section 3)
 - Branch and merge policy, including hotfix strategy (Section 4)
 - The flavor × mode matrix for `dev` and `prod` builds across platforms (Section 5)
-- Mandatory release-build hardening — `--obfuscate`, `--split-debug-info`, R8/ProGuard rules, app size analysis, and Android manifest/asset security verifications (`debuggable=false`, `allowBackup=false`, cleartext traffic, asset audit) (Section 6)
+- Mandatory release-build hardening — `--obfuscate`, `--split-debug-info`, R8/ProGuard rules, app size analysis, and Android manifest/asset security verifications (`debuggable=false`, `allowBackup` — `false` required for sensitive-data apps — cleartext traffic, asset audit) (Section 6)
 - Signing material handling and keystore backup policy (Section 7)
 - The full pre-release checklist split across Code & Quality, Performance, Security, Product & Documentation, and Artifact Validation (Section 8)
 - Step-by-step Android, iOS, Windows, macOS and Linux release procedures with exact build commands (Sections 9, 10, 11, 11A, 11B)
-- A pointer to the **store readiness gates** (Section 9A). The gates themselves — Google Play, App Store, Microsoft Store, Mac App Store / Developer ID, Snap Store / Flathub — now live in `platform_store_readiness.md`. Each declared channel's gate is completed before the first upload and re-checked before every production release.
+- The **store readiness gates** (Google Play, App Store, Microsoft Store, Mac App Store / Developer ID, Snap Store / Flathub) are not in this file; they live in `platform_store_readiness.md`. Each declared channel's gate is completed before the first upload and re-checked before every production release.
 - Distribution channels per platform (Section 12)
 - Rollback and hotfix process (Section 13)
 - Release evidence — what to archive after each release (Section 14)
@@ -95,7 +95,7 @@ Rule N: Read docs/release_process.md before suggesting any release build command
 
   Build command rules:
   - Every prod release build MUST include --obfuscate and
-    --split-debug-info=build/symbols/<platform>-<version>/.
+    --split-debug-info=build/symbols/<platform>-<flavor>-<version>/.
   - Every prod release build MUST be followed by a size-analysis step
     and a symbol archive step.
   - Never suggest a release command that omits these flags.
@@ -144,20 +144,15 @@ Say:
 
 After each release, populate Section 14 in a release notes file (or a dated entry inside `release_process.md` itself, depending on your team's preference). Tell the AI:
 
-> *"Update release_process.md §14 with the v1.2.0 evidence: CI run #847, symbols archived at releases/v1.2.0/symbols/, APK at releases/v1.2.0/, OWASP checklist signed off by [name] on 2026-04-29."*
+> *"Update release_process.md §14 with the v1.2.0 evidence: CI run #847, symbols archived at <archive>/v1.2.0/symbols/ (outside the repo), APK at <archive>/v1.2.0/, OWASP checklist signed off by [role] on 2026-04-29."*
 
 This keeps the audit trail current, so when a crash report arrives six months later you know exactly where to find the symbols.
 
 ---
 
-## How the five documents work together
+## How this fits with the other documents
 
-| Document | Answers |
-|----------|---------|
-| `flutter_project_engineering_standard.md` | *How* should all Flutter code be written? Universal rules for every project. |
-| `flutter_build_flavors_guide.md` | *How* exactly do flavors wire into each platform's native build system? |
-| `architecture.md` | *What* did this specific project decide? Tier, packages, schema, routes, signing strategy. |
-| `security.md` | *What* does this specific project protect? What is sensitive, what is never logged, how is data encrypted? |
-| `release_process.md` | *How* does this specific project ship? The exact commands, the checklist, the evidence trail. |
-
-The release process document sits at the **end of the chain**: it consumes decisions recorded in `architecture.md §15` (signing strategy, build outputs supported), pre-release controls from `security.md §18` (the security review checklist), and command patterns from `flutter_build_flavors_guide.md` (per-platform build syntax). It is the operational layer that turns those decisions into a reproducible, auditable release. If `architecture.md` and `security.md` are the *what* and the *why*, `release_process.md` is the *how-to-ship-it-without-breaking-anything*.
+`README.md` lists every document in the guideline set and which ones apply to an app, by profile.
+In short: the **references** (engineering standard, flavors guide, store gates, `guideline.md`) say
+*how* to build and ship; the app's filled-in **templates** in `docs/` (`PROJECT_PROFILE.md`,
+`architecture.md`, `security.md`, `release_process.md`) record *what this app decided*.

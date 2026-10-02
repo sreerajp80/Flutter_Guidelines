@@ -1,10 +1,10 @@
 # Release Process
 
-Use this document for repositories that ship builds to QA, external testers, enterprise
+Fill in this document in full for repositories that ship builds to QA, external testers, enterprise
 distribution, or public app stores.
 
-If the repository is not release-tracked yet, keep this file short and mark the current release
-scope clearly.
+Every app has this file (`DOCS_FOLDER_GUIDELINE.md` §6). If the `Production App Extension` does
+not apply yet, fill in §1 only and write "not yet shipping" as the release profile.
 
 ---
 
@@ -18,7 +18,7 @@ scope clearly.
   - `Windows` — channels: `<Microsoft Store / signed direct download>`
   - `macOS` — channels: `<Mac App Store / Developer ID notarized download>`
   - `Linux` — channels: `<Snap Store / Flathub / AppImage / .deb / .rpm>`
-- Store gates in force: the sections of `docs/platform_store_readiness.md` for each channel above.
+- Store gates in force: the sections of `docs/guidelines/platform_store_readiness.md` for each channel above.
 - Engineering standard profiles in force:
   - `Core Baseline`
   - `Production App Extension`
@@ -62,7 +62,7 @@ scope clearly.
 |--------|------|---------|-----------------|
 | `dev` | `debug` | Local development | `flutter run --flavor dev` |
 | `dev` | `release` | Release-like QA | `flutter build apk --flavor dev --release` |
-| `prod` | `release` | Final release artifact | See section 8 for full commands with all required flags |
+| `prod` | `release` | Final release artifact | See sections 9–11B for full commands with all required flags |
 
 Adjust the matrix if the project uses `staging`, `qa`, or no flavors.
 
@@ -70,7 +70,7 @@ Adjust the matrix if the project uses `staging`, `qa`, or no flavors.
 > the Flutter tool auto-injects `FLUTTER_APP_FLAVOR` and rejects any attempt to set it via
 > `--dart-define`. On Windows, macOS and Linux desktop, pass
 > `--dart-define=APP_FLAVOR=<name>` instead. See
-> `docs/flutter_build_flavors_guide.md` and `docs/flutter_project_engineering_standard.md §5.2`
+> `docs/guidelines/flutter_build_flavors_guide.md` and `docs/guidelines/flutter_project_engineering_standard.md §5.2`
 > for the full rationale and the matching `AppFlavorConfig` reader.
 
 ---
@@ -84,8 +84,11 @@ release-blocking issue.
 
 ```bash
 --obfuscate
---split-debug-info=build/symbols/<platform>-<version>/
+--split-debug-info=build/symbols/<platform>-<flavor>-<version>/
 ```
+
+`<platform>` is `android`, `ios`, `windows`, `macos` or `linux`; drop `-<flavor>` when the app has no
+flavors; `<version>` is the full `pubspec.yaml` version, e.g. `1.4.0+27`.
 
 `--obfuscate` renames Dart class and method names in the compiled binary to meaningless
 identifiers. This serves two purposes:
@@ -99,8 +102,9 @@ from crash reports.
 **Symbol archive policy:**
 - The symbols directory MUST be archived securely after every production release build.
 - Symbols MUST be retained for the lifetime of the released version.
-- Symbols MUST NOT be committed to source control (add to `.gitignore`).
-- Store them alongside the release artifact: e.g. `releases/v1.2.3/symbols/`.
+- Symbols MUST NOT be committed to source control (`build/` is already in `.gitignore`).
+- Copy them to the secure archive **outside the repository**, next to the release artifact (for
+  example `<archive>/v1.2.3/symbols/`), and record the location in §14.
 - Without the symbols, stack traces from that version are permanently unreadable.
 
 ### 6.2 ProGuard / R8 (Android)
@@ -114,7 +118,7 @@ Always perform a full release build test after adding a new dependency, as R8 ca
 classes only accessed via reflection. Symptoms: `ClassNotFoundException` or `NoSuchMethodException`
 only in release builds.
 
-Reference: `android/app/proguard-rules.pro` and `docs/flutter_build_flavors_guide.md`.
+Reference: `android/app/proguard-rules.pro` and `docs/guidelines/flutter_build_flavors_guide.md`.
 
 ### 6.3 App Size Analysis
 
@@ -163,8 +167,8 @@ Size budgets (from engineering standard):
 
 ### 6.4 Debuggable And Backup Verification (Android)
 
-Verify that both `android:debuggable` and `android:allowBackup` are explicitly safe in the merged
-release manifest before every production release.
+Verify `android:debuggable` and `android:allowBackup` in the merged release manifest before every
+production release.
 
 1. **`android:debuggable=false`**: A debuggable release build allows an attacker to attach a
    debugger via ADB, inspect memory, execute arbitrary code, and bypass application controls.
@@ -172,7 +176,9 @@ release manifest before every production release.
 2. **`android:allowBackup=false`**: If `allowBackup` is enabled (`true`), an attacker with physical
    or ADB access to an unlocked device can execute `adb backup` and pull the entire application sandbox
    (including databases, shared preferences, and internal files) without root. For apps handling
-   sensitive user data, `android:allowBackup` MUST be `false` (or strictly restricted via `fullBackupContent`).
+   sensitive user data (Sensitive Data Extension), `android:allowBackup` MUST be `false` (or strictly
+   restricted via `fullBackupContent`). Other apps choose deliberately and record the choice in
+   `docs/security.md` §10.
 
 Check via `aapt2`:
 
@@ -196,10 +202,11 @@ aapt2 dump xmltree $APK --file AndroidManifest.xml | Select-String -Pattern "all
 
 **Expected results:**
 - `debuggable`: No `application-debuggable` line present (defaults to false when absent).
-- `allowBackup`: `android:allowBackup(0x...)=0x0` (false) or absent with explicit application-level exclusion.
+- `allowBackup`: matches the choice in `docs/security.md` §10. Under the Sensitive Data Extension:
+  `android:allowBackup(0x...)=0x0` (false), or explicit exclusion rules.
 
 Alternatively, inspect in Android Studio:
-Build → Analyze APK → Select APK → AndroidManifest.xml → confirm `debuggable` is absent/false and `allowBackup` is false.
+Build → Analyze APK → Select APK → AndroidManifest.xml → confirm `debuggable` is absent/false and `allowBackup` matches the recorded choice.
 
 ### 6.5 Network Security Configuration And Cleartext Traffic
 
@@ -287,14 +294,16 @@ Complete these items before every release.
 - [ ] Debug symbols archived securely for this version.
 - [ ] ProGuard / R8 rules verified (Android).
 - [ ] `android:debuggable=false` confirmed in merged release manifest (Android).
-- [ ] `android:allowBackup=false` (or strict exclusion) verified in merged release manifest (Android).
+- [ ] `android:allowBackup` matches the choice recorded in `docs/security.md` §10; `false` (or strict
+      exclusion) is MUST under the Sensitive Data Extension (Android).
 - [ ] Cleartext traffic disabled (`usesCleartextTraffic=false`) and network security config verified.
 - [ ] Pre-release asset audit passed — no `.env`, keys, or mock data bundled in APK `assets/` (§6.6).
 - [ ] Manifest component export audit completed — no accidental `android:exported="true"` (§6.7).
 - [ ] Manifest and permission review completed — no unnecessary permissions.
 - [ ] Other declared platforms: iOS/macOS usage strings and entitlements, MSIX capabilities, Snap
       plugs and Flatpak `finish-args` are least-privilege (`docs/security.md` §10).
-- [ ] OWASP Mobile Top 10 checklist reviewed (see `docs/security.md`).
+- [ ] OWASP Mobile Top 10 checklist signed off in `docs/security.md` §12 (MUST under the Sensitive
+      Data Extension; SHOULD otherwise).
 - [ ] Secrets, keys, and backup settings reviewed if applicable.
 - [ ] Sensitive-data flows revalidated if applicable.
 - [ ] Data retention and purge behavior verified.
@@ -319,11 +328,11 @@ All references are to the engineering standard unless noted. "Declared" means li
 - [ ] Date pickers and dialogs verified under every fallback-delegate language (§8.3.1).
 - [ ] Every icon-only control has a localized tooltip (§7.8).
 - [ ] If the project profile enables the About signature badge: it shows, localized and centered
-      (`docs/guideline.md` §1.7).
+      (`docs/guidelines/guideline.md` §1.7).
 
 ### Store Readiness (Every Declared Channel)
 
-- [ ] `docs/platform_store_readiness.md` §1 (rules for every store) passes.
+- [ ] `docs/guidelines/platform_store_readiness.md` §1 (rules for every store) passes.
 - [ ] Google Play: §2 gate completed — target API level re-checked, `versionCode` increased, App
       Bundle + Play App Signing, Data safety, listings and screenshots, internal testing and
       pre-launch report clean, staged rollout planned.
@@ -364,11 +373,11 @@ All references are to the engineering standard unless noted. "Declared" means li
 5. Run format, analyze, and test checks.
 6. Build the required Android production artifacts with all hardening flags (`--release`, `--obfuscate`, `--split-debug-info`, `--split-per-abi` or `appbundle`).
 7. Run size analysis and record output.
-8. Verify `android:debuggable=false` and `android:allowBackup=false` in the merged manifest (§6.4).
+8. Verify `android:debuggable=false` and the recorded `android:allowBackup` value in the merged manifest (§6.4).
 9. Perform pre-release asset extraction audit to ensure no secrets were packaged in `assets/` (§6.6).
 10. Verify artifact naming, installability, and environment on a physical or emulated device.
 11. Archive debug symbols from `build/symbols/` to the secure archive location.
-12. Complete the Google Play readiness gate (`docs/platform_store_readiness.md` §2) before uploading to Play.
+12. Complete the Google Play readiness gate (`docs/guidelines/platform_store_readiness.md` §2) before uploading to Play.
 13. Upload to the intended distribution channel (Play Store console or secure internal repository).
 14. Tag the release in git: `git tag v<version>` and push.
 
@@ -477,32 +486,13 @@ flutter build appbundle `
 #### C. Post-Build APK Verification Commands
 
 ```bash
-# Verify no debuggable flag and verify allowBackup=false
+# Verify no debuggable flag, and check allowBackup against docs/security.md §10
 aapt2 dump badging build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk | grep -i debuggable
 aapt2 dump xmltree build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk --file AndroidManifest.xml | grep -i allowBackup
 
 # Audit asset bundle for unencrypted secrets
 unzip -l build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk "assets/*"
 ```
-
----
-
-## 9A. Store Readiness Gates (Moved)
-
-The Google Play readiness gate that used to live here, and the gates for every other store, are
-now in `docs/platform_store_readiness.md`:
-
-| Channel | Section |
-|---|---|
-| Every store | §1 |
-| Google Play | §2 (the old §9A.1–§9A.8 are now §2.1–§2.8) |
-| Apple App Store | §3 |
-| Microsoft Store / Windows direct download | §4 |
-| Mac App Store / Developer ID | §5 |
-| Snap Store / Flathub / Linux packages | §6 |
-
-Each declared channel's gate MUST pass before the first upload and be re-checked before every
-production release.
 
 ---
 
@@ -517,11 +507,11 @@ Build machine: macOS with the Xcode version App Store Connect currently requires
 4. Build the iOS release artifact with all hardening flags (commands below).
 5. Run size analysis and record output.
 6. Validate `Info.plist` usage strings, privacy manifest, export compliance, and environment
-   config (`docs/platform_store_readiness.md` §3.3).
+   config (`docs/guidelines/platform_store_readiness.md` §3.3).
 7. Archive debug symbols from `build/symbols/`.
 8. Upload the `.ipa` with Xcode Organizer or Transporter.
 9. Test the build through TestFlight on a real device, in every declared language.
-10. Complete the App Store gate (`docs/platform_store_readiness.md` §3) and submit for review.
+10. Complete the App Store gate (`docs/guidelines/platform_store_readiness.md` §3) and submit for review.
 11. Tag the release in git: `git tag v<version>` and push.
 
 ### iOS Build Commands
@@ -558,7 +548,7 @@ Build machine: Windows (x64; arm64 builds need an arm64-capable toolchain).
 8. Verify the MSIX installs, upgrades from the previous version, and uninstalls cleanly on a clean
    Windows environment (not the dev machine).
 9. Archive debug symbols.
-10. Complete the Windows gate (`docs/platform_store_readiness.md` §4), then submit to Partner
+10. Complete the Windows gate (`docs/guidelines/platform_store_readiness.md` §4), then submit to Partner
     Center or publish the signed download with its checksum.
 
 ### Windows Build Commands
@@ -597,8 +587,8 @@ Build machine: macOS with a current Xcode.
      Connect; test through TestFlight; submit for review.
    - **Developer ID**: sign with hardened runtime, notarize with `xcrun notarytool`, staple with
      `xcrun stapler`, package as a signed, notarized and stapled DMG, and verify with `spctl` on a
-     clean Mac (`docs/platform_store_readiness.md` §5.3).
-9. Complete the macOS gate (`docs/platform_store_readiness.md` §5).
+     clean Mac (`docs/guidelines/platform_store_readiness.md` §5.3).
+9. Complete the macOS gate (`docs/guidelines/platform_store_readiness.md` §5).
 
 ### macOS Build Commands
 
@@ -630,7 +620,7 @@ build packages from engineering standard §5.5.3.
 8. Validate the desktop file and AppStream metadata (`desktop-file-validate`,
    `appstreamcli validate`).
 9. Install and run each package on clean VMs of the main target distros, under Wayland and X11.
-10. Complete the Linux gate (`docs/platform_store_readiness.md` §6), then upload
+10. Complete the Linux gate (`docs/guidelines/platform_store_readiness.md` §6), then upload
     (`snapcraft upload`, Flathub pull request) or publish the files with checksums.
 
 ### Linux Build Commands
@@ -691,7 +681,7 @@ Store links or references to release evidence here after each release.
 - Built artifact: `<location>`
 - Release notes: `<location>`
 - Store submission or rollout record: `<location>`
-- OWASP checklist sign-off: `<signed by / date>`
+- OWASP checklist sign-off (required under the Sensitive Data Extension): `<signed by / date>`
 
 ---
 

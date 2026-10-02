@@ -8,30 +8,27 @@ This guideline was built by studying real `CLAUDE.md` files from Flutter apps of
 
 ---
 
-## 1. First choose a profile: Thin or Thick
+## 1. First choose a style: Thin or Thick
 
 Pick one of two styles before you write anything.
 
-### Thin pointer profile
-Use this when the project already has (or will have) a full `docs/` folder — `architecture.md`,
-`security.md`, `release_process.md`, and so on.
+### Thin pointer style
+Use this for every app that has the baseline `docs/` set — `architecture.md`, `security.md`,
+`release_process.md`, and so on.
 
 - `CLAUDE.md` stays short. It gives identity, commands, and a short rule summary.
 - It **points** to the `docs/` files for the detail. It does not repeat them.
 - Rule: if a detail lives in a `docs/` file, do not copy it into `CLAUDE.md` — link to it.
-- Typical fit: medium or large apps, shipped apps, security-sensitive apps.
 
-### Thick self-contained profile
-Use this when the project is small or has **no** `docs/` folder, so `CLAUDE.md` must hold
+### Thick self-contained style
+Use this only for an existing app that has **no** `docs/` folder yet, so `CLAUDE.md` must hold
 everything itself.
 
 - `CLAUDE.md` inlines the detail: schema tables, provider/route tables, full dos-and-don'ts.
-- Typical fit: small utilities, counters, single-purpose tools.
 
 ### How to choose
-- Has a `docs/` set already, or the project is medium/large → **Thin**.
-- No `docs/`, small project, one developer → **Thick**.
-- When unsure, start **Thin** and grow. It is easier to add detail than to trim a wall of text.
+- **New apps use Thin.** Every new app has the baseline `docs/` set (`DOCS_FOLDER_GUIDELINE.md` §6), so the detail already has a home.
+- **Thick** is only for an existing app that has no `docs/` folder yet. Move it to Thin when the `docs/` set is created.
 
 ---
 
@@ -41,20 +38,21 @@ Write sections in this order. Skip the ones that do not apply (see the checklist
 
 1. Title + read-first banner
 2. Project identity / tech stack
-3. Doc references (Thin profile) — the "read these before working" table
+3. Doc references (Thin style) — the "read these before working" table
 4. Hard / non-negotiable rules
 5. Architecture rules (layers, boundaries, state, navigation, database)
 6. Build & run commands
 7. Build flavors (dev / prod)
 8. Signing / keystore
 9. Security rules
-10. Code style / naming conventions
-11. Testing rules
-12. Dependency constraints
-13. Where things live (project tree)
-14. Workflow rules (plan → approve → log) — from this guideline set
-15. Communication rules (simple English) — from this guideline set
-16. Dos & Don'ts ("What Claude must always / never do")
+10. Localization rules
+11. Code style / naming conventions
+12. Testing rules
+13. Dependency constraints
+14. Where things live (project tree)
+15. Workflow rules (plan → approve → log) — from this guideline set
+16. Communication rules (simple English) — from this guideline set
+17. Dos & Don'ts ("What Claude must always / never do")
 
 ---
 
@@ -71,15 +69,16 @@ Write sections in this order. Skip the ones that do not apply (see the checklist
 | 7 | Build flavors | If flavors used | inline or link | inline |
 | 8 | Signing / keystore | If it ships releases | link | inline |
 | 9 | Security rules | **Always** | summarize + link | inline |
-| 10 | Code style / naming | **Always** | short | full table |
-| 11 | Testing rules | **Always** | short + link | full |
-| 12 | Dependency constraints | If constrained | link | inline allow/block lists |
-| 13 | Where things live (tree) | Recommended | short | full |
-| 14 | Workflow rules (plan/log) | **Always** | inline (see §5) | inline (see §5) |
-| 15 | Communication rules | **Always** | inline (see §5) | inline (see §5) |
-| 16 | Dos & Don'ts | Recommended | optional | **yes** |
+| 10 | Localization rules | **Always** | inline | inline |
+| 11 | Code style / naming | **Always** | short | full table |
+| 12 | Testing rules | **Always** | short + link | full |
+| 13 | Dependency constraints | If constrained | link | inline allow/block lists |
+| 14 | Where things live (tree) | Recommended | short | full |
+| 15 | Workflow rules (plan/log) | **Always** | inline (see §5) | inline (see §5) |
+| 16 | Communication rules | **Always** | inline (see §5) | inline (see §5) |
+| 17 | Dos & Don'ts | Recommended | optional | **yes** |
 
-Every Flutter app **MUST** have a root `CLAUDE.md` file. All "Always" sections in the table above must appear in every project's `CLAUDE.md`, regardless of profile.
+Every Flutter app **MUST** have a root `CLAUDE.md` file. All "Always" sections in the table above must appear in every project's `CLAUDE.md`, regardless of style.
 
 ---
 
@@ -119,20 +118,22 @@ Read it before making any change. <If Thin: See the docs table below for full de
 
 ---
 
-## Read these docs before working   <!-- Thin profile only -->
+## Read these docs before working   <!-- Thin style only -->
 
 | Document | Read when |
 |----------|-----------|
 | docs/architecture.md | Changing structure, screens, state, services, models, repositories |
 | docs/security.md | Touching permissions, logging, storage, crypto, manifest |
 | docs/release_process.md | Building a release, versioning, release checklist |
-| docs/flutter_build_flavors_guide.md | Build config, signing, flavors, Gradle, ProGuard |
-| docs/flutter_project_engineering_standard.md | Any code change — layers, naming, testing |
+| docs/guidelines/flutter_build_flavors_guide.md | Build config, signing, flavors, Gradle, ProGuard |
+| docs/guidelines/flutter_project_engineering_standard.md | Any code change — layers, naming, testing |
 | docs/PROJECT_PROFILE.md | Always — platforms, stores, languages, identity, About options |
-| docs/platform_store_readiness.md | Before any release; when touching permissions, entitlements, store-listed behavior |
+| docs/guidelines/guideline.md | About screen, Android keystore, `lib/` layout |
+| docs/guidelines/platform_store_readiness.md | Before any release; when touching permissions, entitlements, store-listed behavior |
 | docs/GUIDELINES_MANIFEST.md | The shared Flutter guidelines index |
 
-> If a doc is copied into this project's own `docs/`, the local copy wins over the master.
+> `docs/<file>` = this app's filled-in copy (templates). `docs/guidelines/<file>` = the shared
+> reference in the submodule; never copy it into `docs/`.
 
 ---
 
@@ -200,8 +201,9 @@ flutter build linux --release --dart-define=APP_FLAVOR=prod \
 | dev | <id>.dev | <App Name> Dev | Debug keystore (automatic) |
 | prod | <id> | <App Name> | Release keystore (android/key.properties) |
 
-> Flutter ≥ 3.19 sets `FLUTTER_APP_FLAVOR` for you; read it with
-> `String.fromEnvironment('FLUTTER_APP_FLAVOR')`. Do not pass it explicitly.
+> Android and iOS: `--flavor <name>` only — Flutter sets `FLUTTER_APP_FLAVOR` itself; never pass it
+> with `--dart-define`. Desktop: `--dart-define=APP_FLAVOR=<name>`. `AppFlavorConfig` reads both
+> (engineering standard §5.2).
 
 ---
 
@@ -209,9 +211,9 @@ flutter build linux --release --dart-define=APP_FLAVOR=prod \
 
 - Keystore file: <path>. Alias: <alias>. Keep at least one offline backup.
 - Create `android/key.properties` (gitignored — never commit).
-- `.gitignore` must include: `key.properties`, `*.jks`, `*.keystore`, `build/symbols/`.
+- `.gitignore` must include: `android/key.properties`, `android/*.jks`, `android/*.keystore`, and `build/` (which also holds the debug symbols).
 - Other platforms: <Apple certificates/profiles, Windows code-signing certificate, notarization
-  credentials> live outside the repo (`guideline.md` §2.5). Never commit them.
+  credentials> live outside the repo (`docs/guidelines/guideline.md` §2.5). Never commit them.
 
 ---
 
@@ -238,14 +240,14 @@ flutter build linux --release --dart-define=APP_FLAVOR=prod \
 - Language packs in force: <none / `language_packs/<name>.md` — follow its rules, gates and
   glossary>. Flag any translation you are unsure of for native-reader review in the change log.
 - `supportedLocales` equals the declared languages; <fallback delegate installed for: `<codes>` /
-  none needed> (§8.3.1). Format dates and numbers with the `formattingLocale(...)` helper (§8.3.2).
+  none needed> (engineering standard §8.3.1). Format dates and numbers with the `formattingLocale(...)` helper (§8.3.2).
 - <If 2+ languages:> The language is user-selectable in Settings (System default + each language
   by its endonym), persisted, and applied without restarting the app.
-- Menu, button, label, tab and tooltip strings stay short in every declared language (§8.6); only
-  `desc…`/`help…`/`empty…`/`error…`/`body…` keys may be long prose.
-- Every icon-only control has a localized `tooltip:` (§7.8).
-- Material and Cupertino come from the `material_ui` / `cupertino_ui` packages (pinned with `^`).
-  Import `package:material_ui/material_ui.dart`, never `package:flutter/material.dart` (§6.1).
+- Menu, button, label, tab and tooltip strings stay short in every declared language (engineering standard §8.6); only
+  `desc…`/`help…`/`empty…`/`error…`/`body…`/`aboutDetail…` keys may be long.
+- Every icon-only control has a localized `tooltip:` (engineering standard §7.8).
+- Material and Cupertino come from the `material_ui` / `cupertino_ui` packages (with a caret `^` constraint).
+  Import `package:material_ui/material_ui.dart`, never `package:flutter/material.dart` (engineering standard §6.1).
 - The About screen is data-driven and localized<; it ends with the signature badge "<badge text>"
   — only if the project profile enables it>.
 - Literals are allowed only for logs, non-UI exception messages, asset paths, route names, and
@@ -284,7 +286,7 @@ flutter build linux --release --dart-define=APP_FLAVOR=prod \
 
 ```
 CLAUDE.md            # this file — project rules
-docs/                # design docs (Thin profile)
+docs/                # design docs (Thin style)
 plans/               # one plan per change (see workflow rules)
 change_log/          # one log per implemented change
 lib/                 # app source
@@ -322,7 +324,7 @@ Create `plans/` and `change_log/` if they do not exist.
 
 ---
 
-## What Claude must always / never do   <!-- recommended, esp. Thick profile -->
+## What Claude must always / never do   <!-- recommended, esp. Thick style -->
 
 **Always:** <read this file first; state the target layer before adding a class; run analyze +
 test after changes; keep main.dart thin.>
@@ -336,7 +338,7 @@ test after changes; keep main.dart thin.>
 ## 5. Sections you must always keep verbatim in spirit
 
 Two sections are part of this guideline set's working method and must appear in **every** `CLAUDE.md`, both
-profiles, worded the same in meaning:
+styles, worded the same in meaning:
 
 - **Workflow rules** — plan → approve → log, with relative repository paths only, no local system
   details and no sensitive internet-inappropriate data, `plans/` and `change_log/` naming, and the
@@ -383,9 +385,9 @@ AI always sees them, even in a Thin file.
 
 ## 8. Final self-check before saving a new `CLAUDE.md`
 
-- [ ] Profile chosen (Thin or Thick) and the file matches it.
+- [ ] Style chosen (Thin or Thick) and the file matches it.
 - [ ] All "Always" sections from the §3 checklist are present.
-- [ ] Identity table filled with real versions, minSdk, org id, connectivity stance.
+- [ ] Identity table filled with real versions, org id, connectivity stance, and minSdk if Android is declared.
 - [ ] Build commands are copy-paste ready and match the project's flavors.
 - [ ] Workflow rules (plan/approve/log) and simple-English rule are present, inline.
 - [ ] `plans/` and `change_log/` entries use relative paths only and contain zero local system details and zero sensitive data — safe to publish on the internet.
@@ -394,7 +396,7 @@ AI always sees them, even in a Thin file.
 - [ ] Any language pack in force is named, and its key rule is summarized.
 - [ ] With two or more languages: the in-app language picker rule is present.
 - [ ] The declared platforms and stores are named, matching `docs/PROJECT_PROFILE.md`, with build
-      commands for each and a pointer to `docs/platform_store_readiness.md`.
+      commands for each and a pointer to `docs/guidelines/platform_store_readiness.md`.
 - [ ] The tooltip rule (every icon-only control) and the short-label rule are present.
 - [ ] The About-screen rule is present, including the signature badge only if the profile enables it.
 - [ ] No personal data (names, personal emails) is written into the file beyond what the project

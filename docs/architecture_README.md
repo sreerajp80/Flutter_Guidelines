@@ -106,14 +106,9 @@ This pins the AI to your documented decisions rather than its defaults.
 
 ---
 
-## How the five documents work together
+## How this fits with the other documents
 
-| Document | Answers |
-|----------|---------|
-| `flutter_project_engineering_standard.md` | *How* should all Flutter code be written? Universal rules for every project. |
-| `flutter_build_flavors_guide.md` | *How* exactly do flavors wire into each platform's native build system? |
-| `architecture.md` | *What* did this specific project decide? Tier, packages, schema, routes, signing strategy. |
-| `security.md` | *What* does this specific project protect? What is sensitive, what is never logged, how is data encrypted? |
-| `release_process.md` | *How* does this specific project ship? The exact commands, the checklist, the evidence trail. |
-
-`architecture.md` is the **project-specific decision record**: it captures the choices your team made from the menu of options that the engineering standard and build flavors guide describe. `security.md` then constrains what those decisions are allowed to leak through logs, exports, or backups. `release_process.md` turns the assembled set of decisions into the exact commands and gates a shipped build must pass. The engineering standard and the build flavors guide are the underlying pattern library and platform-mechanics reference behind all of it.
+`README.md` lists every document in the guideline set and which ones apply to an app, by profile.
+In short: the **references** (engineering standard, flavors guide, store gates, `guideline.md`) say
+*how* to build and ship; the app's filled-in **templates** in `docs/` (`PROJECT_PROFILE.md`,
+`architecture.md`, `security.md`, `release_process.md`) record *what this app decided*.

@@ -15,17 +15,26 @@ Tell your AI agent: *"Follow the Flutter guidelines in `docs/guidelines/`, start
 `AI_AGENT_START_HERE.md`."* That page gives the read order, the bootstrap steps for a new app, and
 the release gates for each store.
 
-## These are templates
+## Templates and references
 
-This repository is a **source collection of templates**, not a deployed app. When you adopt
-these guidelines in a real project, add this repository as a Git submodule at
-`docs/guidelines/` (see [GUIDELINES_MANIFEST.md](GUIDELINES_MANIFEST.md)), copy the blueprint
-templates you need into the app's `docs/` folder, and reference them from its `CLAUDE.md` and
-`AGENTS.md`.
+This repository is a guideline set, not an app. A project adds it as a Git submodule at
+`docs/guidelines/` (see [GUIDELINES_MANIFEST.md](GUIDELINES_MANIFEST.md)). Its files are of two
+kinds:
 
-That is why cross-references inside the documents use a `docs/` prefix — for example
-`docs/architecture.md`. The prefix means "once the file lives in your app's `docs/` folder",
-**not** a path inside this repository (here the files are flat, side by side).
+| Kind | Files | What the app does with them |
+|---|---|---|
+| **Templates** | `PROJECT_PROFILE_TEMPLATE.md` (→ `PROJECT_PROFILE.md`), `architecture.md`, `security.md`, `release_process.md` | Copy into the app's `docs/` folder and fill in. The local copy is the truth for that app. |
+| **References** | Everything else (`guideline.md`, the engineering standard, the flavors guide, the store gates, the `*_GUIDELINE.md` files, language packs, profiles) | Never copy. Read them in place at `docs/guidelines/<file>`. |
+
+Paths inside the documents follow the same rule:
+
+- `docs/<template>` — for example `docs/architecture.md` — means the app's filled-in copy.
+- `docs/guidelines/<file>` — for example `docs/guidelines/guideline.md` — means the shared
+  reference in the submodule.
+- A bare file name such as `platform_store_readiness.md` means the file in this guideline set.
+
+Inside this repository all files sit side by side; the `docs/` prefixes describe where they
+live in an app.
 
 ## The documents
 
@@ -55,11 +64,11 @@ That is why cross-references inside the documents use a `docs/` prefix — for e
 - **Writing / maintaining project root `CLAUDE.md` & `AGENTS.md` (MUST)** — follow [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md) and [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md).
 - **Structuring project `docs/` files** — follow [DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md).
 - **Adding guidelines to an existing app** — copy [GUIDELINES_MANIFEST.md](GUIDELINES_MANIFEST.md) to your app's `docs/` folder.
-- **Designing one app's structure** — fill in [architecture.md](architecture.md) for that app.
+- **Designing one app's structure** — fill in your copy of [architecture.md](architecture.md).
 - **Setting up build flavors** — see [flutter_build_flavors_guide.md](flutter_build_flavors_guide.md).
 - **Publishing to a store** — pass the gates in [platform_store_readiness.md](platform_store_readiness.md),
   then follow [release_process.md](release_process.md).
-- **Handling sensitive data** — fill in [security.md](security.md) for that app.
+- **Handling sensitive data** — fill in your copy of [security.md](security.md) in full.
 
 ## What applies where (by profile)
 
@@ -71,9 +80,12 @@ read across the row.
 
 | Profile | Applies to | Documents / sections in force |
 |---|---|---|
-| `Core Baseline` | Every app | Root `CLAUDE.md` (via [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md), **MUST**); Root `AGENTS.md` (via [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md), **MUST**); `docs/PROJECT_PROFILE.md` (**MUST**); [guideline.md](guideline.md); the Core Baseline rules of [flutter_project_engineering_standard.md](flutter_project_engineering_standard.md); language packs for declared languages; [architecture.md](architecture.md) (fill in what applies); [DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md) |
-| `Production App Extension` | Apps shipped to real users / QA / stores | The above **plus** [platform_store_readiness.md](platform_store_readiness.md) (sections for declared channels), [release_process.md](release_process.md), [flutter_build_flavors_guide.md](flutter_build_flavors_guide.md) (if using flavors), and the `Production App Extension` sections of the engineering standard |
-| `Sensitive Data Extension` | Apps handling secrets, PII, health, finance, or local encrypted stores | The above **plus** [security.md](security.md) and the `Sensitive Data Extension` sections of the engineering standard |
+| `Core Baseline` | Every app | Root `CLAUDE.md` (via [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md), **MUST**); Root `AGENTS.md` (via [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md), **MUST**); the 9 baseline `docs/` files, including `PROJECT_PROFILE.md`, `architecture.md`, `security.md` and `release_process.md` ([DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md) §6, **MUST**); [guideline.md](guideline.md); the Core Baseline rules of [flutter_project_engineering_standard.md](flutter_project_engineering_standard.md); language packs for declared languages |
+| `Production App Extension` | Apps shipped to real users / QA / stores | The above **plus** [platform_store_readiness.md](platform_store_readiness.md) (sections for declared channels), the full [release_process.md](release_process.md), [flutter_build_flavors_guide.md](flutter_build_flavors_guide.md) (if using flavors), and the `Production App Extension` sections of the engineering standard |
+| `Sensitive Data Extension` | Apps handling secrets, PII, health, finance, or local encrypted stores | The above **plus** the full [security.md](security.md) and the `Sensitive Data Extension` sections of the engineering standard |
+
+`security.md` and `release_process.md` exist in every app. An app outside the matching profile
+keeps them short and says so at the top.
 
 Profiles stack: a shipped password manager is in all three; a small internal tool is in
 `Core Baseline` only.
