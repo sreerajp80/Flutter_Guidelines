@@ -444,9 +444,13 @@ Since Flutter 3.47 the Android toolchain is AGP 9+ / Gradle 9+, so these rules a
   }
   ```
 
-- **Migrator flags.** The Flutter migrator adds `android.builtInKotlin=false` and
-  `android.newDsl=false` to `android/gradle.properties`. Keep them until the Flutter app
-  template drops them.
+- **Built-in Kotlin.** Set `android.builtInKotlin=true` in `android/gradle.properties` and do
+  NOT apply `kotlin-android` (or `org.jetbrains.kotlin.android`) in the app module. Keep the
+  `apply false` Kotlin plugin line in `android/settings.gradle.kts`. Check every Android
+  plugin first: one that always applies KGP breaks the build. Details and rollback are in
+  `docs/guidelines/flutter_build_flavors_guide.md` ("Android Toolchain Baseline").
+- **`android.newDsl=false`.** The Flutter migrator adds it. Keep it until a separate
+  migration to the new AGP DSL.
 - **Gradle 9+ has no `project.exec { }`.** Custom Gradle tasks that run a process MUST use
   an injected `ExecOperations` instead.
 - **R8 full mode is the default** since AGP 8.0. This is more aggressive about removing

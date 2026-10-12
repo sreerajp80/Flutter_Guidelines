@@ -171,10 +171,21 @@ kotlin {
 
 Notes:
 
-- The Flutter migrator adds `android.builtInKotlin=false` and `android.newDsl=false` to
-  `android/gradle.properties`. Keep them until the Flutter app template drops them. With
-  `builtInKotlin=false` the Flutter Gradle plugin applies Kotlin, so the app module's
-  `plugins { }` block does not need `org.jetbrains.kotlin.android`.
+- **Built-in Kotlin (Flutter 3.47+, AGP 9+).** AGP compiles Kotlin by itself. Set
+  `android.builtInKotlin=true` in `android/gradle.properties`, and do NOT apply
+  `kotlin-android` (or `org.jetbrains.kotlin.android`) in the app module's `plugins { }`
+  block. If the app still applies it, every build warns that this will fail in a future
+  Flutter version. Keep `id("org.jetbrains.kotlin.android") version "..." apply false` in
+  `android/settings.gradle.kts`: it puts that Kotlin version on the build classpath, and AGP
+  uses it instead of its own older bundled Kotlin. The `kotlin { compilerOptions { } }`
+  block above stays as it is.
+- Before turning built-in Kotlin on, check each Android plugin's
+  `android/build.gradle(.kts)`. A plugin that always applies KGP (the Kotlin Gradle Plugin)
+  breaks the build. Plugins that skip KGP when `android.builtInKotlin` is on, or that never
+  apply it, are fine. Rollback: apply `kotlin-android` again and set
+  `android.builtInKotlin=false`.
+- The Flutter migrator also adds `android.newDsl=false`. Keep it until a separate migration
+  to the new AGP DSL.
 - Gradle 9 and later have no `project.exec { }`. Custom tasks (for example a task that runs a Dart
   script to generate build metadata) MUST use an injected `ExecOperations` instead.
 - After the upgrade, run a clean `flutter build apk --flavor dev` and
