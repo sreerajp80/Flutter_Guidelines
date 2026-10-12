@@ -4,7 +4,7 @@ Use this as a reusable reference for Flutter projects that define build flavors 
 and `prod` across Android, iOS, and Windows, macOS and Linux desktop.
 
 This guide documents one well-tested approach for each platform. It is not the only valid
-approach. Teams with different CI pipelines, signing strategies, or flavor matrices should treat
+approach. Teams with different signing strategies or flavor matrices should treat
 the examples here as a starting point and document their deviations in `docs/architecture.md`.
 
 > **Last checked against Flutter 3.47 / Dart 3.13 (2026-10).** This guide does not pin tool
@@ -225,13 +225,13 @@ android {
 > `storeFile` is a relative path. This section only adds the flavor-specific Gradle wiring.**
 
 Android signing is context-dependent. There is no single correct strategy for all teams.
-Choose the approach that fits your CI environment and team policy, then document it in
+Choose the approach that fits your team policy, then document it in
 `docs/architecture.md §15`.
 
 **Strategy A — Local file-based signing (single developer or small team)**
 
-A `key.properties` file supplies keystore credentials on the developer's machine. CI writes
-the same file from environment variables. This is the simplest approach for small projects.
+A `key.properties` file supplies keystore credentials on the release owner's machine. This is
+the simplest approach for small projects.
 
 - `* --debug` — Android provides the SDK debug keystore automatically. No setup required.
 - `dev --release` — Configured by the team. Options: use the release keystore (same as prod),
@@ -240,16 +240,13 @@ the same file from environment variables. This is the simplest approach for smal
 - `prod --release` — Release keystore required. The build MUST fail clearly if credentials are
   absent rather than silently signing with the wrong key.
 
-**Strategy B — CI-managed signing (recommended for multi-developer teams)**
-
-Signing credentials are never stored on developer machines. CI injects the keystore and
-credentials as secrets at build time. Local builds of `prod --release` are intentionally
-blocked or produce an unsigned artifact. This is the lower-risk approach for team projects.
-
-**Strategy C — Separate keystores per flavor**
+**Strategy B — Separate keystores per flavor**
 
 `dev` and `prod` flavors use completely separate keystores with different aliases. This
 guarantees a dev-signed APK can never be mistaken for or substitute a prod APK.
+
+Signing is never done in GitHub CI. CI runs only the analyze/test checks and Dependabot and
+holds no signing secrets (engineering standard §19.3). Release builds are signed locally.
 
 Whichever strategy is chosen: **document it explicitly** and commit that documentation. The
 most common signing incidents happen when the strategy is assumed rather than written down.
@@ -292,9 +289,6 @@ keyPassword=your-key-password
 `storeFile` is the keystore filename you chose in Step 1, relative to `android/`. Step 4 resolves
 it with `rootProject.file(...)`, and the root project of the Android build is the `android/`
 folder (`guideline.md` §2.2).
-
-For CI environments, set these values as environment variables and write the file from a
-pre-build step rather than committing it.
 
 #### Step 3 — Gitignore Signing Artefacts
 
@@ -416,9 +410,6 @@ afterEvaluate {
   names, a custom build type name, or more than one flavor dimension, the task names will
   differ and this guard will silently do nothing. Verify the actual task names with
   `./gradlew tasks --all | grep -i release` before relying on this check.
-- This pattern assumes signing credentials come from a local file. Teams using CI-managed
-  signing (Strategy B) should replace this guard with a CI pipeline check rather than a
-  Gradle-level file existence test.
 - `afterEvaluate` with `tasks.findByName` is sensitive to the Gradle configuration phase.
   In some project configurations, tasks are registered lazily and `findByName` may return
   null even for tasks that will exist at execution time. Use `tasks.matching { ... }` or

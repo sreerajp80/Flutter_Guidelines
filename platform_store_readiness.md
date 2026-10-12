@@ -424,7 +424,7 @@ the declared channels. Build commands: `release_process.md` §11B.
   repository. Use a current `org.freedesktop.Platform` or `org.gnome.Platform` runtime.
 - Flathub builds in its own offline infrastructure. Check the current Flathub requirements for
   whether the manifest must build Flutter from source (vendoring the Flutter SDK and pub cache) or
-  may package the release bundle your CI produced; follow whichever they currently accept.
+  may package the release bundle you built locally; follow whichever they currently accept.
 - `finish-args` least privilege: typically `--share=ipc`, `--socket=wayland`,
   `--socket=fallback-x11`, `--device=dri`, plus `--share=network` only if the app uses the
   network. Avoid broad `--filesystem=home`; use portals (file chooser) instead.

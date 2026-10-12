@@ -24,7 +24,7 @@ Every Flutter repository MUST declare which profile applies.
 | Profile | Applies To | Purpose |
 |---------|------------|---------|
 | `Core Baseline` | All Flutter application repositories | Universal maintainability and code-quality rules |
-| `Production App Extension` | Apps shipped to real users, external QA, or store review | Release, CI, UX, and environment discipline |
+| `Production App Extension` | Apps shipped to real users, external QA, or store review | Release, UX, and environment discipline |
 | `Sensitive Data Extension` | Apps handling auth secrets, financial data, health data, PII, or locally encrypted content | Stronger security, storage, logging, and backup rules |
 
 A simple internal tool may use only `Core Baseline`.
@@ -171,7 +171,7 @@ project/
 |-- lib/
 |-- test/
 |-- integration_test/         # Required only when end-to-end coverage applies
-|-- .github/workflows/
+|-- .github/                  # workflows/ci.yml (checks only) + dependabot.yml (§19)
 |-- CLAUDE.md                 # Mandatory project-root AI instructions (MUST)
 |-- AGENTS.md                 # Mandatory project-root instructions for other AI agents (MUST)
 |-- analysis_options.yaml
@@ -641,7 +641,7 @@ msix_config:
   # Microsoft Store: set store: true — the Store signs the package, do not sign it yourself.
   # store: true
   # Direct download: sign with a trusted code-signing certificate kept OUTSIDE the repo,
-  # passed in by CI (certificate_path / certificate_password), never committed.
+  # passed in at local release build time (certificate_path / certificate_password), never committed.
 ```
 
 Build command:
@@ -2064,7 +2064,7 @@ Under `Production App Extension`:
 These are starting budgets only for the platforms the project declares; a project MAY set its own
 in `docs/PROJECT_PROFILE.md`. Exceeding the hard limit requires a documented justification in the release checklist.
 
-Track size in CI using `--analyze-size` output. Record the baseline at project start and
+Track size with `--analyze-size` output at each local release build (CI does not build releases, §19.3). Record the baseline at project start and
 diff on each release.
 
 ---
@@ -2922,111 +2922,111 @@ Rules:
 
 ---
 
-## 19. CI Standard
+## 19. CI Standard (Checks And Dependabot Only)
 
-### 19.1 Minimum CI
+GitHub CI in **every** repository (all profiles) does exactly two things: it runs the
+analyze/test checks (19.1) and it runs Dependabot (19.2). Nothing else (19.3).
 
-All active app repositories SHOULD have CI on pull requests or on the merge path to the protected
-branch.
+### 19.1 Required CI Checks
 
-Minimum checks:
+Every repository MUST have a CI workflow that runs on pull requests and on pushes to the
+protected main branch. It MUST be in place before the first merge to the main branch.
+
+Allowed steps — only these:
+
+- Check out the code and set up Flutter (and Java only if a check needs it).
+- `flutter pub get`.
+- `dart run build_runner build --delete-conflicting-outputs` — only if the project uses code
+  generation (needed before analyze and test).
+- `dart format --output=none --set-exit-if-changed .`
+- `flutter analyze`
+- `flutter test` — this includes the localization parity test (§8) and any other unit, widget,
+  or golden test.
+- Other read-only check scripts that only pass or fail, such as the generated-file staleness
+  check (Option A in §12.2) or a language-pack check (`language_packs/`).
+
+Rules:
+
+- The workflow uses no secrets and the least permissions (`permissions: contents: read`).
+- One `ubuntu-latest` runner is enough; checks do not need a per-platform runner.
+- Pin the Flutter version or channel the project uses, so CI and contributors agree.
+
+Example `.github/workflows/ci.yml`:
 
 ```yaml
-steps:
-  - run: flutter pub get
-  - run: dart run build_runner build --delete-conflicting-outputs   # If using code gen
-  - run: dart format --output=none --set-exit-if-changed .
-  - run: flutter analyze
-  - run: flutter test
-```
+name: CI
 
-### 19.2 Production App Extension
+on:
+  pull_request:
+  push:
+    branches: [main]
 
-For shipped apps, CI MUST build a release artifact for **every declared platform**. Each platform
-needs a matching runner OS:
+permissions:
+  contents: read
 
-| Platform | Runner | Why |
-|---|---|---|
-| Android | Linux (or any) | Fastest; needs Java 17+ |
-| Linux | Linux | Needs GTK dev packages (5.5.3); use the oldest supported distro |
-| Windows | Windows | Windows builds only run on Windows |
-| iOS, macOS | macOS | Xcode only runs on macOS |
-
-Example (GitHub Actions — keep only the jobs for declared platforms):
-
-```yaml
 jobs:
-  test:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with: { channel: stable }
       - run: flutter pub get
-      - run: flutter test --coverage
-
-  android:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      # checkout + flutter setup + Java 17 setup
-      - run: flutter build appbundle --flavor prod --release
-          --obfuscate
-          --split-debug-info=build/symbols/android-prod-${{ env.APP_VERSION }}/
-
-  ios:
-    needs: test
-    runs-on: macos-latest
-    steps:
-      # checkout + flutter setup; unsigned check build in CI, signed build on release
-      - run: flutter build ios --flavor prod --release --no-codesign
-          --obfuscate
-          --split-debug-info=build/symbols/ios-prod-${{ env.APP_VERSION }}/
-
-  macos:
-    needs: test
-    runs-on: macos-latest
-    steps:
-      - run: flutter build macos --release --dart-define=APP_FLAVOR=prod
-          --obfuscate
-          --split-debug-info=build/symbols/macos-prod-${{ env.APP_VERSION }}/
-
-  windows:
-    needs: test
-    runs-on: windows-latest
-    steps:
-      - run: flutter build windows --release --dart-define=APP_FLAVOR=prod
-          --obfuscate
-          --split-debug-info=build/symbols/windows-prod-${{ env.APP_VERSION }}/
-
-  linux:
-    needs: test
-    runs-on: ubuntu-22.04   # oldest distro you support
-    steps:
-      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
-      - run: flutter build linux --release --dart-define=APP_FLAVOR=prod
-          --obfuscate
-          --split-debug-info=build/symbols/linux-prod-${{ env.APP_VERSION }}/
+      - run: dart run build_runner build --delete-conflicting-outputs   # Only if using code gen
+      - run: dart format --output=none --set-exit-if-changed .
+      - run: flutter analyze
+      - run: flutter test
 ```
 
-Signing material (keystore, Apple certificates and profiles, Windows code-signing certificate,
-store API keys) is provided to CI only as **encrypted CI secrets**, decoded at build time, and
-never written to the repository or to logs.
+### 19.2 Dependabot
+
+Every repository MUST commit a `.github/dependabot.yml`:
+
+- `pub` (the app's `pubspec.yaml` at the root) — MUST.
+- `github-actions` (the actions used in `.github/workflows/`) — MUST.
+- `gradle` for `android/` — MAY, if the project wants Gradle plugin updates as PRs.
+
+Dependabot pull requests pass the same 19.1 checks before merge, like any other pull request.
+Review a major-version update on its own (§16.6) and follow the project's plan → approve → log
+workflow before merging it; close the PR if it is not approved.
+
+Example `.github/dependabot.yml`:
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+```
+
+### 19.3 What CI Must Not Do
+
+GitHub CI MUST NOT:
+
+- build release artifacts (APK, AAB, IPA, MSIX, DMG, Linux bundles) for any platform;
+- sign anything, or hold signing material or store API keys as CI secrets;
+- upload to any store or distribution channel, or deploy anything;
+- create GitHub releases or tags, or bump versions;
+- run any other workflow besides the 19.1 checks and Dependabot.
+
+Release builds — with `--obfuscate` and
+`--split-debug-info=build/symbols/<platform>-<flavor>-<version>/` — signing, size checks,
+license checks, and uploads are done **locally** by the release owner, following each
+platform's steps in `release_process.md`. Signing material stays outside the repository and
+outside CI.
 
 The symbols folder is always `build/symbols/<platform>-<flavor>-<version>/` (drop `-<flavor>` when
 the app has no flavors; `<version>` is the full `pubspec.yaml` version, e.g. `1.4.0+27`), so symbols
 from different releases never collide. `release_process.md` §6.1 and `security.md` §8.1 use the
-same layout. Drop `--flavor prod` and `APP_FLAVOR` from the jobs if the app has no flavors.
-`${{ env.APP_VERSION }}` is the GitHub Actions form — substitute the equivalent for your CI.
+same layout.
 
-Additional recommended steps:
-- Dependency license check: `flutter pub licenses > licenses.txt && <verify script>`.
-- Generated file staleness check (if Option A from section 12.2 is chosen):
-  verify that `*.g.dart` and `*.freezed.dart` files match what `build_runner` would produce.
-- Artifact size check: compare `--analyze-size` output against the project's size budget from
-  section 10.7.
-
-### 19.3 Pre-Commit
+### 19.4 Pre-Commit
 
 A pre-commit hook MAY run formatting and analysis locally, but CI remains the source of truth.
 

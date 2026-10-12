@@ -121,7 +121,7 @@ or any `*_sa.*` asset file. They are reliable Hindi giveaways and make a good gr
 ```
 
 ```bash
-# CI gate: fail the build if any Hindi marker appears in the Sanskrit ARB,
+# CI check: fail if any Hindi marker appears in the Sanskrit ARB,
 # app_config.json, or Sanskrit asset files.
 # Uses PCRE (-P) with lookarounds so standalone copulas/words are not confused with
 # legitimate Sanskrit roots (e.g. स्थाप्यताम्, स्थानम्) or indeclinables (यथा, तथा, कथा).

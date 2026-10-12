@@ -318,6 +318,11 @@ Every change follows plan-before-changing and log-after-changing:
    check out or commit the submodule or its version. If a guideline needs a change, write a note
    for the user instead (`docs/guidelines/DOCS_FOLDER_GUIDELINE.md` §1.1). If the folder is empty
    or missing, stop and ask the user.
+5. **CI is checks + Dependabot only.** GitHub CI runs only `flutter pub get`, code generation (if
+   used), the format check, `flutter analyze`, `flutter test`, and other pass/fail check scripts,
+   plus Dependabot (`.github/dependabot.yml` for `pub` and `github-actions`). CI never builds
+   release artifacts, signs, holds signing secrets, uploads, or publishes. Release builds are
+   done locally (`docs/guidelines/flutter_project_engineering_standard.md` §19).
 
 Create `plans/` and `change_log/` if they do not exist.
 
@@ -357,7 +362,8 @@ styles, worded the same in meaning:
 
 - **Workflow rules** — plan → approve → log, with relative repository paths only, no local system
   details and no sensitive internet-inappropriate data, `plans/` and `change_log/` naming, the
-  hard approval gate, and the read-only rule for the `docs/guidelines/` submodule.
+  hard approval gate, the read-only rule for the `docs/guidelines/` submodule, and the
+  checks-and-Dependabot-only CI rule.
 - **Communication rules** — always simple English.
 
 Do not shorten these into a single link. Keep the short inline version shown in the template so AI agents always see them, even in a Thin file.
@@ -394,6 +400,7 @@ Do not shorten these into a single link. Keep the short inline version shown in 
 - [ ] Build commands are copy-paste ready and match the project's flavors.
 - [ ] Workflow rules (plan/approve/log) and simple-English rule are present, inline.
 - [ ] The read-only rule for the `docs/guidelines/` submodule is present, inline (workflow rule 4).
+- [ ] The CI rule (checks + Dependabot only) is present, inline (workflow rule 5).
 - [ ] `plans/` and `change_log/` entries use relative paths only and contain zero local system details and zero sensitive data — safe to publish on the internet.
 - [ ] A localization rule is present: all user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations`.
 - [ ] The declared languages are named, matching `docs/PROJECT_PROFILE.md`, with key parity across their ARB files.

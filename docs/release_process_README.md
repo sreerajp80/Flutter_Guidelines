@@ -38,7 +38,7 @@ Section 14 is the audit record. Every release writes back: where the symbols are
 
 ## What should you fill out BEFORE starting the project?
 
-Most of `release_process.md` is filled out **before the first release**, not before the first line of code. But a small number of decisions must be made very early because they shape the build configuration, the `.gitignore`, and the CI workflow. Trying to retrofit them later is expensive.
+Most of `release_process.md` is filled out **before the first release**, not before the first line of code. But a small number of decisions must be made very early because they shape the build configuration, the `.gitignore`, and the local release build setup. Trying to retrofit them later is expensive.
 
 | Priority | Section | Why Before Coding |
 |----------|---------|-------------------|
@@ -112,7 +112,7 @@ Rule N: Read docs/release_process.md before suggesting any release build command
 
 **Step 3 — Fill out the 🔴 Must sections before the first release**
 
-The 🔴 Must items shape your `.gitignore`, your `build.gradle.kts`, and your CI workflow. They cannot be retrofitted cleanly. The 🟡 Soon items can wait until just before the first release, but not later.
+The 🔴 Must items shape your `.gitignore`, your `build.gradle.kts`, and your local release build setup. They cannot be retrofitted cleanly. The 🟡 Soon items can wait until just before the first release, but not later.
 
 **Step 4 — Reference it explicitly when asking for help**
 

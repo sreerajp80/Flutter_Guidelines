@@ -252,13 +252,14 @@ Inspect all declared activities, services, and broadcast receivers in the merged
 > Keystore location, `key.properties` naming, and the `.gitignore` rules: see
 > `guideline.md §2` (the source of truth).
 
-- Signing config location: `<environment variables / secrets manager / CI secret store>`
+- Signing config location: `<local environment variables / secrets manager>` (never CI)
 - Keystore or certificate ownership: `<owner>`
 - Secret rotation process: `<brief process>`
 - Rules:
   - Signing material must not live in source control.
   - Local signing helpers must not expose secrets in committed files.
-  - CI logs must not print signing secrets.
+  - GitHub CI never holds signing secrets; it runs only checks and Dependabot (engineering
+    standard §19).
   - Keystore files MUST be backed up in at least two separate secure locations.
     Losing the keystore means being unable to publish updates to the Play Store for that app.
   - The same rules apply to Apple certificates and provisioning profiles, App Store Connect API
@@ -281,6 +282,8 @@ Complete these items before every release.
 - [ ] No critical or release-blocking bugs remain open.
 - [ ] Code generation is current: `dart run build_runner build --delete-conflicting-outputs` run
       and all generated files up to date.
+- [ ] Release artifacts built locally, not in CI (engineering standard §19.3).
+- [ ] Dependency licenses checked (`flutter pub licenses`) when the release adds dependencies.
 
 ### Performance
 
@@ -543,7 +546,7 @@ Build machine: Windows (x64; arm64 builds need an arm64-capable toolchain).
 4. Build the Windows release.
 5. Run size analysis.
 6. Create the MSIX package — `store: true` for the Microsoft Store, or signed with the
-   code-signing certificate (from the CI secret store) for direct download.
+   code-signing certificate (from the local secret store) for direct download.
 7. Run the Windows App Certification Kit on the package.
 8. Verify the MSIX installs, upgrades from the previous version, and uninstalls cleanly on a clean
    Windows environment (not the dev machine).

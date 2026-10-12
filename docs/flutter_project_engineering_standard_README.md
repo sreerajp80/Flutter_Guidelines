@@ -16,7 +16,7 @@ It has 24 sections across every dimension of Flutter development. Here is the ma
 
 **Sections 10–15 — Quality and safety.** Performance: **Impeller as the default renderer (iOS, Android API 29+, and desktop since 3.47)**, frame budget targets, widget rebuild optimization, list rendering rules, image memory rules, isolates for background work, startup targets, and the app size budget table. Error handling: global boundaries in `main()`, four-tier classification (recoverable/degraded/session/fatal), repository-layer error wrapping, and UI error presentation. Code generation: `build_runner` commands (using `dart run`, since `flutter pub run` is deprecated) and the generated file policy. Database: versioned migration strategy, WAL mode, index strategy, integrity constraints. Logging: six-level taxonomy, what to never log, what to log per layer, log rotation. Security: core rules for all apps, Sensitive Data Extension requirements, OWASP Mobile Top 10 checklist.
 
-**Sections 16–24 — Standards and process.** Coding standards including the recommended `analysis_options.yaml` lint rules (with pinned `flutter_lints`). Asset management (WebP/SVG formats, 2×/3× variants, **per-platform asset bundling new in Flutter 3.41**, font licensing). Testing levels per profile, plus Widget Previews (stable since Flutter 3.47). CI minimum and production checklists. Git hygiene. Documentation requirements. AI coding assistant instructions. The Definition of Done checklists. Practical one-liner lessons.
+**Sections 16–24 — Standards and process.** Coding standards including the recommended `analysis_options.yaml` lint rules (with pinned `flutter_lints`). Asset management (WebP/SVG formats, 2×/3× variants, **per-platform asset bundling new in Flutter 3.41**, font licensing). Testing levels per profile, plus Widget Previews (stable since Flutter 3.47). CI that runs only analyze/test checks and Dependabot (no release builds or signing in CI). Git hygiene. Documentation requirements. AI coding assistant instructions. The Definition of Done checklists. Practical one-liner lessons.
 
 ---
 
@@ -59,7 +59,7 @@ The engineering standard is **not a fill-in-the-blanks template**. You do not wr
 | 🟡 Soon | **§11 Error handling** | Draft the sealed `AppException` hierarchy before the first repository is written. Record in `architecture.md §10`. |
 | 🟡 Soon | **§15 Security** | Decide sensitivity level and active profile. Feed decisions into `security.md §1–§4`. |
 | 🟡 Soon | **§16.1 Lints** | Copy the recommended `analysis_options.yaml` into the project root before writing the first Dart file. |
-| 🟡 Soon | **§19 CI** | Set up the minimum CI workflow before the first merge to main. |
+| 🟡 Soon | **§19 CI** | Set up the checks-only CI workflow and `.github/dependabot.yml` before the first merge to main. |
 | 🟢 Later | **§6 UI/UX** | Reference animation tokens and feedback component rules as each screen is built. |
 | 🟢 Later | **§7 Accessibility** | Verify touch targets, contrast, and semantics as each widget is built. |
 | 🟢 Later | **§10 Performance** | Reference frame budget and list rules as each screen is built. |
@@ -69,7 +69,7 @@ The engineering standard is **not a fill-in-the-blanks template**. You do not wr
 
 **Copy `analysis_options.yaml` lint rules** — Section 16.1 provides the full recommended rule set. Create this file before the first Dart file. Lint problems are cheapest to fix before patterns embed.
 
-**Set up CI with minimum checks** — Section 19.1: `flutter pub get` → `build_runner` → `dart format` → `flutter analyze` → `flutter test`. Set this up before the first code lands, not after.
+**Set up CI with checks and Dependabot only** — Section 19.1: `flutter pub get` → `build_runner` → `dart format` → `flutter analyze` → `flutter test`; Section 19.2: `.github/dependabot.yml` for `pub` and `github-actions`. CI never builds releases, signs, or holds secrets (Section 19.3). Set this up before the first code lands, not after.
 
 **Configure the framework localization delegates in `MaterialApp` and disable Play language splitting** — Section 8.1. Since Flutter 3.47 `GlobalMaterialLocalizations` comes from `material_ui` (its `.delegates` list also covers Cupertino and Widgets). Without these delegates, certain Material widgets render incorrectly on non-English system locales. In addition, `bundle.language.enableSplit = false` must be set in `android/app/build.gradle.kts` so Google Play does not strip non-system languages on download.
 
