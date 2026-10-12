@@ -13,17 +13,20 @@ docs/guidelines/
 ## How to use this file
 
 1. Copy `GUIDELINES_MANIFEST.md` into the `docs/` folder of your Flutter app.
-2. Add the guidelines repository as a Git submodule at `docs/guidelines/`:
+2. The user adds the guidelines repository as a Git submodule at `docs/guidelines/`:
    ```bash
    git submodule add <REPOSITORY_URL> docs/guidelines
    ```
-3. Copy `docs/guidelines/PROJECT_PROFILE_TEMPLATE.md` to `docs/PROJECT_PROFILE.md` and fill it in
+3. **The submodule is read-only for the project.** Never edit, pull, check out or commit it or
+   its version from the project. Only the user updates its version. If a guideline needs a
+   change, see `docs/guidelines/DOCS_FOLDER_GUIDELINE.md` §1.1 "When the guidelines need a change".
+4. Copy `docs/guidelines/PROJECT_PROFILE_TEMPLATE.md` to `docs/PROJECT_PROFILE.md` and fill it in
    (platforms, stores, languages, identity, About options). Copy the other templates
    (`architecture.md`, `security.md`, `release_process.md`) into `docs/` and create the rest of
    the baseline set (`DOCS_FOLDER_GUIDELINE.md` §6).
-4. Reference it from the app's mandatory root `CLAUDE.md` and `AGENTS.md` (e.g. "Follow the guidelines listed in
+5. Reference it from the app's mandatory root `CLAUDE.md` and `AGENTS.md` (e.g. "Follow the guidelines listed in
    `docs/GUIDELINES_MANIFEST.md`, starting with `docs/guidelines/AI_AGENT_START_HERE.md`.").
-5. Open the documents at the relative paths below to read the guidelines.
+6. Open the documents at the relative paths below to read the guidelines.
 
 > **Templates vs. references.** Four files are **templates**: copy them into this app's `docs/`
 > folder and fill them in — `PROJECT_PROFILE_TEMPLATE.md` (as `PROJECT_PROFILE.md`),

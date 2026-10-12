@@ -312,6 +312,10 @@ Every change follows plan-before-changing and log-after-changing:
    LAN/internal IP addresses, local server URLs with ports, device serial numbers, personal email
    addresses — or any secret (API keys, tokens, passwords, keystore passphrases, credentials, PII).
    Write them as if a stranger will read them; nothing should reveal the machine they came from.
+4. **The guidelines submodule is read-only.** `docs/guidelines/` is read-only. Never edit, pull,
+   check out or commit the submodule or its version. If a guideline needs a change, write a note
+   for the user instead (`docs/guidelines/DOCS_FOLDER_GUIDELINE.md` §1.1). If the folder is empty
+   or missing, stop and ask the user.
 
 Create `plans/` and `change_log/` if they do not exist.
 
@@ -341,8 +345,8 @@ Two sections are part of this guideline set's working method and must appear in 
 styles, worded the same in meaning:
 
 - **Workflow rules** — plan → approve → log, with relative repository paths only, no local system
-  details and no sensitive internet-inappropriate data, `plans/` and `change_log/` naming, and the
-  hard approval gate.
+  details and no sensitive internet-inappropriate data, `plans/` and `change_log/` naming, the
+  hard approval gate, and the read-only rule for the `docs/guidelines/` submodule.
 - **Communication rules** — always simple English.
 
 Do not shorten these into a single link. Keep the short inline version shown in the template so the
@@ -378,6 +382,8 @@ AI always sees them, even in a Thin file.
 - A wall of soft "should" rules. Rules that are not enforced train the reader to skip the section.
 - Stale versions and tables. If the identity table says the wrong Flutter version, trust drops.
 - Dropping the workflow or simple-English rules to "save space". They are mandatory.
+- Changing the `docs/guidelines/` submodule from the project (editing, pulling, checking out, or
+  committing a new version). It is read-only; write a note for the user instead.
 - Feature-first restructuring advice with no instruction to do so — say "Tier 1, do not promote
   without discussion".
 
@@ -390,6 +396,7 @@ AI always sees them, even in a Thin file.
 - [ ] Identity table filled with real versions, org id, connectivity stance, and minSdk if Android is declared.
 - [ ] Build commands are copy-paste ready and match the project's flavors.
 - [ ] Workflow rules (plan/approve/log) and simple-English rule are present, inline.
+- [ ] The read-only rule for the `docs/guidelines/` submodule is present, inline (workflow rule 4).
 - [ ] `plans/` and `change_log/` entries use relative paths only and contain zero local system details and zero sensitive data — safe to publish on the internet.
 - [ ] A localization rule is present: all user-visible text comes from `lib/l10n/*.arb` via `AppLocalizations`.
 - [ ] The declared languages are named, matching `docs/PROJECT_PROFILE.md`, with key parity across their ARB files.

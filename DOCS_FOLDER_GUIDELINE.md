@@ -16,12 +16,33 @@ It does **not** apply to, and you must **not** hand-write or edit:
 
 - **`docs/GUIDELINES_MANIFEST.md`** — the shared portable pointer file. It is copied in
   unchanged from the standard set. Do not rewrite it per project.
-- **`docs/guidelines/`** — the shared guidelines **Git submodule**. Never edit files inside
-  the submodule from within a project. Change those only in their own repository. From a
-  project you only ever *read* or *link to* them.
+- **`docs/guidelines/`** — the shared guidelines **Git submodule**. It is **read-only** for the
+  project. A project, and any AI agent working in it, must **never change the submodule in any
+  way**. There are no exceptions:
+  - no editing, adding or deleting files inside `docs/guidelines/`;
+  - no `git pull`, fetch-and-merge, `git checkout`, or `git submodule update` on it;
+  - no staging or committing a new submodule version (the "pointer" — the commit of the
+    guidelines repository that the project records) in the project;
+  - no commits, branches or pushes inside `docs/guidelines/`.
+
+  The project only reads the guideline files and links to them. If `git status` or GitHub
+  Desktop shows "Submodule changes" or a new commit for `docs/guidelines`, do not stage it, do not
+  commit it and do not try to "fix" it. Tell the user.
+
+  Only the user adds the submodule the first time (`git submodule add`) and fills it after a
+  fresh clone (`git submodule update --init`). If an AI agent finds `docs/guidelines/` empty or
+  missing, it stops and asks the user.
 
 Everything else you add under `docs/` (architecture, security, release, and so on) follows the
 rules below.
+
+### 1.1 When the guidelines need a change
+
+1. The project writes a **note**: in chat, or as a file in the project's own `plans/` folder.
+   The note says which guideline file to change, what to change, and why.
+2. The **user** makes the change in a separate session in the guidelines repository, with its
+   own plan, approval and change log. Then the user commits and pushes it.
+3. The **user** then updates the submodule version in each project themselves.
 
 ---
 

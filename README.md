@@ -18,8 +18,10 @@ the release gates for each store.
 ## Templates and references
 
 This repository is a guideline set, not an app. A project adds it as a Git submodule at
-`docs/guidelines/` (see [GUIDELINES_MANIFEST.md](GUIDELINES_MANIFEST.md)). Its files are of two
-kinds:
+`docs/guidelines/` (see [GUIDELINES_MANIFEST.md](GUIDELINES_MANIFEST.md)). The submodule is
+**read-only** for the project: a project never edits, pulls, checks out or commits it. Only the
+user updates its version (see [DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md) §1.1). Its
+files are of two kinds:
 
 | Kind | Files | What the app does with them |
 |---|---|---|

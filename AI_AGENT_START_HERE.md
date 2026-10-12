@@ -23,6 +23,10 @@ them with `docs/guidelines/` (see `GUIDELINES_MANIFEST.md`).
 4. **Only touch declared platforms.** Do not create or edit `ios/`, `macos/`, `linux/`, … unless
    the profile declares that platform.
 5. **Use simple English** in plans, change logs and replies.
+6. **Never change the guidelines submodule.** In an app, `docs/guidelines/` is read-only: never
+   edit, pull, check out or commit it or its version. If a guideline needs a change, write a
+   note for the user instead (`DOCS_FOLDER_GUIDELINE.md` §1.1). If the folder is empty or
+   missing, stop and ask the user.
 
 ---
 
