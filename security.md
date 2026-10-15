@@ -150,8 +150,10 @@ The debug symbol files produced by `--split-debug-info` MUST be:
 
 ### 8.2 R8 / ProGuard
 
-Android release builds run R8 code shrinking. Verify `proguard-rules.pro` keeps classes accessed
-via reflection. See `docs/guidelines/flutter_build_flavors_guide.md` for the required rules.
+Android release builds run R8 code shrinking. Flutter adds the engine's keep rules itself;
+verify that `proguard-rules.pro` (if present) keeps only what packages document as needed (for
+example classes accessed via reflection). See `docs/guidelines/flutter_build_flavors_guide.md`
+("ProGuard / R8 Rules").
 
 ### 8.3 Debuggable Flag
 
@@ -193,13 +195,19 @@ and inject code.
 ### Android
 
 - `android:allowBackup`: `<true/false and why>`
-  - Under the Sensitive Data Extension it MUST be `false`, or `android:fullBackupContent` MUST
-    exclude every sensitive directory. Other apps record their choice and the reason here.
-- `android:fullBackupContent`: `<value>`
+- `android:dataExtractionRules` (Android 12+ / API 31+): `<file and what it excludes>`
+- `android:fullBackupContent` (Android 11 and lower): `<file and what it excludes>`
+  - For apps that target API 31 or higher, `allowBackup="false"` does **not** stop
+    device-to-device transfer; only the `<device-transfer>` section of
+    `dataExtractionRules` controls it.
+  - Under the Sensitive Data Extension, every sensitive file, database and preference MUST be
+    excluded from cloud backup **and** device transfer. Other apps record their choice and
+    the reason here.
 - Screenshot protection:
   - Android: set `FLAG_SECURE` on the window to prevent screenshots and screen recording.
-  - Implementation: use `FlutterWindowManager` or a method channel to call
-    `getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE)`.
+  - Implementation: call `window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)` in
+    `MainActivity` or through a method channel (or use a maintained plugin; the old
+    `flutter_windowmanager` plugin is no longer maintained).
   - Apply on all screens showing sensitive data; remove on non-sensitive screens if UX requires.
 - `android:debuggable`: MUST be `false` in release builds (verify per section 8.3).
 - Root / integrity detection: `<none, or Play Integrity API>`
@@ -209,7 +217,7 @@ and inject code.
 - Sensitive-screen capture policy:
   - Add an opaque overlay on the appropriate "will resign active" hook to prevent the OS
     capturing screen content for the app switcher.
-  - Post-UIScene migration (Flutter ≥ 3.38, iOS 26 SDK builds): apply the overlay in
+  - Apps on the UIScene lifecycle (engineering standard §5.4): apply the overlay in
     `sceneWillResignActive(_:)` on your `UIWindowSceneDelegate` (or via
     `FlutterSceneLifeCycleDelegate` in a plugin).
   - Legacy `AppDelegate`-only projects: apply the overlay in `applicationWillResignActive`.
@@ -330,13 +338,15 @@ Define what data is stored, how long it lives, and what triggers deletion.
 
 ### Data Purge On Uninstall
 
-- Android: app data is deleted on uninstall by default unless `android:allowBackup=true`
-  and a cloud backup exists. Verify backup config explicitly.
+- Android: app data is deleted on uninstall, but cloud backup (and device transfer to a new
+  phone) can bring it back unless the backup rules exclude it. Verify the backup and
+  data-extraction rules explicitly (§10).
 - iOS: Keychain items persist across uninstall, whatever accessibility class they use. For
   sensitive keys, delete Keychain items on first launch after reinstall detection (compare stored install UUID
   against a newly generated one).
-- Windows: `flutter_secure_storage` writes to Windows Credential Manager, which persists across
-  app reinstall. Implement a first-run detection and credential purge if a clean uninstall
+- Windows: depending on the plugin version, `flutter_secure_storage` stores secrets in Windows
+  Credential Manager or in DPAPI-encrypted files under the app's data folder; check the
+  version you use. Either can persist across app reinstall. Implement a first-run detection and credential purge if a clean uninstall
   + reinstall should produce a fresh state.
 - macOS: sandboxed app data lives in `~/Library/Containers/<bundle id>/` and is **not** removed
   when the app is dragged to the Trash; Keychain items also persist. Use the same first-run

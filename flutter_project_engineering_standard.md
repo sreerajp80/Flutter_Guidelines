@@ -297,22 +297,21 @@ If the app has only one environment and no parallel install need, flavors MAY be
 A common baseline is `dev` and `prod`.
 
 The `AppFlavorConfig` MUST read the flavor value from two environment variables in priority
-order. This shape is required because Flutter handles the flavor signal differently on each
-platform target:
+order. This shape is required because a build passes the flavor in one of two ways, depending
+on what the platform and the toolchain support:
 
-1. `APP_FLAVOR` — a custom, non-reserved name. This is what desktop builds (Windows, Linux,
-   macOS) pass via `--dart-define=APP_FLAVOR=<value>`. Windows and Linux do not accept
-   `--flavor`; macOS accepts it only with matching Xcode schemes (5.5.2), so desktop builds
-   always use `APP_FLAVOR`. `FLUTTER_APP_FLAVOR` cannot be set via `--dart-define` (see below).
+1. `APP_FLAVOR` — a custom, non-reserved name, passed with `--dart-define=APP_FLAVOR=<value>`.
+   Use it only on a platform where `--flavor` is not available (see "Which way to pass the
+   flavor" below). `FLUTTER_APP_FLAVOR` cannot be set via `--dart-define` (see below).
 2. `FLUTTER_APP_FLAVOR` — the framework-owned name. The Flutter tool injects this
    automatically as a compile-time define whenever `--flavor` is passed to `flutter run` or
-   `flutter build`. This is the path used on Android and iOS.
+   `flutter build`.
 
-> **Framework reservation (Flutter ≥ 3.19).** The build fails with
+> **Framework reservation.** The build fails with
 > `Target kernel_snapshot_program failed: Error: FLUTTER_APP_FLAVOR is used by the framework
 > and cannot be set using --dart-define or --dart-define-from-file` if any build command
 > tries to pass `FLUTTER_APP_FLAVOR` explicitly. The two-variable pattern below is what lets
-> a single `AppFlavorConfig` work uniformly on Android, iOS, and desktop.
+> a single `AppFlavorConfig` work on every platform, whichever way the flavor arrives.
 
 ```dart
 enum AppFlavor { dev, prod }
@@ -360,35 +359,43 @@ class AppFlavorConfig {
 The modern equivalent of `String.fromEnvironment('FLUTTER_APP_FLAVOR', ...)` is the global
 `appFlavor` constant from `package:flutter/services.dart`. Either accessor is acceptable;
 the two-variable resolution above MUST be preserved on top of whichever accessor is chosen,
-otherwise desktop builds have no way to communicate the flavor.
+otherwise a platform that cannot use `--flavor` has no way to communicate the flavor.
 
-#### Build And Run Command Conventions
+#### Which Way To Pass The Flavor
 
-| Platform | Pattern | Why |
-|----------|---------|-----|
-| Android, iOS | `--flavor <name>` only | Flutter auto-injects `FLUTTER_APP_FLAVOR`; passing `--dart-define=FLUTTER_APP_FLAVOR=...` fails the build. |
-| Windows, Linux, macOS desktop | `--dart-define=APP_FLAVOR=<name>` | Windows and Linux do not accept `--flavor`; on macOS it needs Xcode schemes, so `APP_FLAVOR` is the one rule for all desktops. The reserved `FLUTTER_APP_FLAVOR` name cannot be used via dart-define. |
+Use **one rule** for every platform, and check it against the project's own toolchain:
+
+1. **Use `--flavor <name>`** when `flutter build <platform> -h` lists `--flavor` **and** the
+   platform has the native setup it needs:
+   - Android: product flavors in Gradle (below).
+   - iOS and macOS: a matching Xcode scheme and build configurations (5.4, 5.5.2).
+   - Windows and Linux: no native setup is needed when the tool supports the flag. Optional
+     per-flavor native changes (window title, `APPLICATION_ID`) are in the flavors guide.
+2. **Otherwise use `--dart-define=APP_FLAVOR=<name>`.** This covers a desktop platform on a
+   toolchain without `--flavor` support, and macOS without per-flavor Xcode schemes.
+3. **Never pass both** for the same build, and never pass `FLUTTER_APP_FLAVOR` yourself.
+
+Record the chosen way per platform in `docs/architecture.md` §15 and in the command blocks of
+`CLAUDE.md` / `AGENTS.md`.
 
 ```bash
-# Android / iOS — --flavor only
+# Platform and toolchain support --flavor (Android, iOS, and any desktop that lists it)
 flutter run --flavor dev
-flutter run --flavor prod
+flutter run -d windows --flavor dev
 flutter build apk --flavor prod --release
 
-# Windows / Linux / macOS desktop — APP_FLAVOR dart-define only
-flutter run -d windows --dart-define=APP_FLAVOR=dev
-flutter build windows --release --dart-define=APP_FLAVOR=prod
+# Platform without --flavor support (or macOS without per-flavor Xcode schemes)
+flutter run -d macos --dart-define=APP_FLAVOR=dev
 flutter build macos --release --dart-define=APP_FLAVOR=prod
-flutter build linux --release --dart-define=APP_FLAVOR=prod
 ```
 
-Native Android and iOS flavor names SHOULD stay aligned with the Dart flavor value.
+Native flavor names (Gradle product flavors, Xcode schemes) SHOULD match the Dart flavor value.
 
 #### Android Product Flavors
 
 When Android flavors are used, the project SHOULD define product flavors in
-`android/app/build.gradle.kts` (Kotlin DSL is the default for new projects since Flutter 3.41;
-Groovy DSL `build.gradle` is still supported in inherited projects but uses
+`android/app/build.gradle.kts` (Kotlin DSL is what `flutter create` writes for new projects;
+Groovy DSL `build.gradle` still works in older projects but uses
 `flavorDimensions "environment"` without the `+=` operator).
 
 ```kotlin
@@ -423,38 +430,44 @@ This standard does not pin tool versions. The rules are:
 - **Look up versions, never guess them.** AI agents and contributors MUST read the current
   versions from `flutter --version` and the project files above before writing or changing
   build files. Never write a version from memory.
-- **Java 17 minimum.** Java 11 builds will fail. Verify with `java -version`.
+- **Use the JDK the build needs.** Current AGP versions need Java 17 or later; an older JDK
+  fails the build. `flutter doctor -v` shows which JDK Flutter uses; check it with
+  `java -version`.
 
-> **Reference snapshot — not a rule.** When this standard was last checked (2026-10), the
-> latest stable Flutter (3.47 / Dart 3.13) generated AGP 9.1.0, KGP 2.4.0 and Gradle 9.3.1.
-> Use this only to spot a project that is clearly behind.
+> **Reference snapshot — not a rule.** When this standard was last checked (2026-10-15), the
+> latest stable Flutter (3.47.6 / Dart 3.13.5) generated AGP 9.1.0, KGP 2.4.0, Gradle 9.3.1,
+> `compileSdk` / `targetSdk` 36 and `minSdk` 24, and needed Java 17. Use this only to spot a
+> project that is clearly behind.
 
-Since Flutter 3.47 the Android toolchain is AGP 9+ / Gradle 9+, so these rules apply:
+#### Android Build Files — Rules For Any AGP Version
 
-- **On AGP 9+, the `kotlinOptions { }` block is rejected.** Set the JVM target with the top-level
-  `kotlin { compilerOptions { } }` block in `android/app/build.gradle.kts`:
+- **Set the Kotlin JVM target with the top-level `kotlin { compilerOptions { } }` block** in
+  `android/app/build.gradle.kts`. Do not use the legacy `kotlinOptions { }` block inside
+  `android { }`: it is deprecated, and it fails once AGP's built-in Kotlin is on (AGP 9 and
+  later). `compilerOptions` works in every mode:
 
   ```kotlin
   import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
   kotlin {
       compilerOptions {
-          jvmTarget.set(JvmTarget.JVM_17)
+          jvmTarget.set(JvmTarget.JVM_17) // match compileOptions in android { }
       }
   }
   ```
 
-- **Built-in Kotlin.** Set `android.builtInKotlin=true` in `android/gradle.properties` and do
-  NOT apply `kotlin-android` (or `org.jetbrains.kotlin.android`) in the app module. Keep the
-  `apply false` Kotlin plugin line in `android/settings.gradle.kts`. Check every Android
-  plugin first: one that always applies KGP breaks the build. Details and rollback are in
-  `docs/guidelines/flutter_build_flavors_guide.md` ("Android Toolchain Baseline").
-- **`android.newDsl=false`.** The Flutter migrator adds it. Keep it until a separate
-  migration to the new AGP DSL.
-- **Gradle 9+ has no `project.exec { }`.** Custom Gradle tasks that run a process MUST use
-  an injected `ExecOperations` instead.
-- **R8 full mode is the default** since AGP 8.0. This is more aggressive about removing
-  seemingly-unused classes — make ProGuard keep rules deliberate (see
+- **Keep the `gradle.properties` flags that Flutter writes.** On AGP 9 and later,
+  `flutter create` and the Flutter migrator write `android.builtInKotlin` and `android.newDsl`
+  to `android/gradle.properties`. Keep the values Flutter wrote. Turning built-in Kotlin on
+  yourself (`android.builtInKotlin=true`, and removing `kotlin-android` from the app module) is
+  an optional, separate migration. Do it only after checking that every Android plugin
+  supports it: a plugin that always applies the Kotlin Gradle Plugin breaks the build. Steps
+  and rollback: `docs/guidelines/flutter_build_flavors_guide.md` ("Android Toolchain
+  Baseline").
+- **Gradle 9 and later have no `project.exec { }`.** Custom Gradle tasks that run a process
+  MUST use an injected `ExecOperations` instead (this also works on older Gradle).
+- **R8 full mode is the default** on all current AGP versions. It removes seemingly-unused
+  classes more aggressively, so keep rules must be deliberate (see
   `docs/guidelines/flutter_build_flavors_guide.md` ProGuard section).
 
 Full `settings.gradle.kts` and `build.gradle.kts` examples are in
@@ -464,78 +477,94 @@ Full `settings.gradle.kts` and `build.gradle.kts` examples are in
 
 Do the upgrade as its own change, with no feature work mixed in:
 
-1. Read the official "What's new" post and breaking-changes list for every release you are
-   crossing.
+1. Read the official "What's new" post and the breaking-changes list
+   (`docs.flutter.dev/release/breaking-changes`) for every release you are crossing.
 2. `flutter upgrade`, then `flutter pub upgrade` and `flutter pub outdated` to see which
    plugins need a new major.
-3. Run `dart fix --apply`, plus any release-specific `dart fix --code=...` migration named in
-   the release notes.
+3. Run `dart fix --apply`, plus any `dart fix --apply --code=<name>` migration named in the
+   release notes. Named migrations do not run with plain `dart fix --apply`.
 4. Let the Flutter migrator update the Android files (AGP, KGP, Gradle wrapper,
    `gradle.properties`). Do NOT type versions from memory; check what Flutter wrote and keep
-   it. Raise iOS / macOS deployment targets if the release raised the minimum.
-5. Run `flutter analyze`, the full test suite, and a release build of every flavor. Update
-   the pinned versions in `CLAUDE.md` / `AGENTS.md` and the CI image, and record the upgrade
-   in `CHANGELOG.md`.
+   it. Compare `ios/Podfile` / `macos/Podfile` and the Xcode deployment targets with what a
+   fresh `flutter create` writes, and raise them if the new release raised the minimum.
+5. Run `flutter analyze`, the full test suite, and a release build of every flavor on every
+   declared platform. Update the pinned versions in `CLAUDE.md` / `AGENTS.md` and the CI
+   setup, and record the upgrade in `CHANGELOG.md`.
 
-**Extra steps when crossing Flutter 3.47:**
+**Known migrations — apply each one when its trigger applies to the project:**
 
-- `dart fix --apply --code=migrate_design_widgets` moves Material and Cupertino imports to
-  `material_ui` / `cupertino_ui` (see 6.1). Plain `dart fix --apply` does **not** run it.
-  Replace any `material_ui: any` / `cupertino_ui: any` the tool wrote with a caret (`^`)
-  constraint on the current version.
-- Android moves to AGP 9 / Gradle 9: replace `kotlinOptions { }` with
-  `kotlin { compilerOptions { } }`, and any `project.exec { }` with `ExecOperations`.
-- iOS minimum becomes 15 and macOS minimum becomes 12 (`ios/Podfile`, Xcode).
+| Trigger | Migration |
+|---|---|
+| The `material_ui` / `cupertino_ui` packages exist for your Flutter, and the project still imports `package:flutter/material.dart` or `cupertino.dart` | `dart fix --apply --code=migrate_design_widgets`, then follow 6.1. Replace any `material_ui: any` / `cupertino_ui: any` the tool wrote with a caret (`^`) constraint. |
+| The project moves to AGP 9 or later / Gradle 9 or later | Replace `kotlinOptions { }` with `kotlin { compilerOptions { } }` and `project.exec { }` with `ExecOperations`; keep the `gradle.properties` flags Flutter writes. |
+| The new Flutter raises the minimum iOS or macOS version | Raise `platform :ios` / `platform :osx` in the Podfiles and the Xcode deployment targets. |
+| You will build with an Apple SDK that requires the UIScene lifecycle | Finish the UIScene migration (5.4) first. |
+| `flutter build <desktop platform> -h` now lists `--flavor`, and the project passes `APP_FLAVOR` there | Optional: switch that platform to `--flavor` (5.2). |
 
 #### 5.3.1 Android 16 KB Page Size Compliance
 
-Apps targeting Android 15+ MUST support 16 KB memory pages. Google Play enforces this for
-new and updated apps from **November 1, 2025**, with a broader cutoff of **May 31, 2026**.
-Non-compliant apps will be blocked from publication.
+Google Play requires apps that target Android 15 (API 35) or higher to support 16 KB memory
+pages on 64-bit devices. Check the current enforcement date on Android's page-size guide
+(`developer.android.com/guide/practices/page-sizes`) before each release. When last checked
+(2026-10), it said that from February 1, 2027 an app update without 16 KB support cannot be
+released.
 
-Build tooling on Flutter ≥ 3.24 is already 16 KB-aligned. The risk lies in **precompiled
-native libraries (`.so` files) inside dependencies** that were compiled with 4 KB alignment.
-Common offenders include older builds of `ffmpeg_kit_flutter`, image processing packages,
-and any package that bundles its own `.so` files.
+An app whose code is only Dart, Java or Kotlin is not affected: the Flutter engine and current
+Android build tools produce 16 KB-aligned output. The risk is **precompiled native libraries
+(`.so` files) inside dependencies** that were built with 4 KB alignment — for example older
+media, image-processing or database packages that bundle their own `.so` files.
 
-Required actions under `Production App Extension`:
+Required actions under `Production App Extension`, before every Play Store submission:
 
-- Run `flutter build appbundle --analyze-size` and inspect the `lib/` ABI directory listing
-  for any third-party `.so` files. Verify the publisher's release notes confirm 16 KB
-  alignment.
-- Test the release build on an emulator configured with 16 KB pages
-  (Android Studio → Device Manager → Edit → Advanced settings → "Page size: 16 KB") before
-  every Play Store submission.
-- Document any dependency that has not yet shipped a 16 KB-aligned release as a release-blocker
-  in `architecture.md §21 Known Risks`.
+- Check the native libraries in the release artifact with one of:
+  - Android Studio → **Build → Analyze APK…** → `lib/` folder → the *Alignment* column;
+  - `zipalign -c -P 16 -v 4 <app>.apk` (Android build-tools 35 or later; the last line must
+    say `Verification successful`);
+  - `check_elf_alignment.sh <app>.apk` (script from Android's page-size guide).
+
+  For an `.aab`, run the check on an APK built from it with `bundletool`.
+- Run the release build on a 16 KB emulator: Android Studio → SDK Manager → SDK Platforms →
+  Show Package Details → install a **"Google APIs Experimental 16 KB Page Size"** system
+  image, create a device with it, and confirm with `adb shell getconf PAGE_SIZE` (prints
+  `16384`).
+- Document any dependency that is not yet 16 KB-aligned as a release blocker in
+  `architecture.md §21 Known Risks`.
 
 ### 5.4 iOS Setup (Deployment Target, UIScene, Flavors)
 
-#### iOS Deployment Target And UIScene Migration (Flutter ≥ 3.47)
+#### iOS Deployment Target And UIScene Lifecycle
 
-- **Minimum iOS deployment target: iOS 15.** Flutter 3.47 raised the minimum from iOS 13
-  to iOS 15. Set `platform :ios, '15.0'` in `ios/Podfile` and the iOS Deployment Target
-  in Xcode under Build Settings. Apps that ship on macOS MUST target macOS 12 or later
-  (`platform :osx, '12.0'` in `macos/Podfile`; see 5.5.2).
-- **UIScene lifecycle is mandatory.** Apple requires UIScene adoption for any UIKit app
-  built with the iOS 26 SDK; the App Store requires iOS 26 SDK builds, and that deadline
-  (April 2026) is now in force. Apps built with Xcode 27 that do not adopt UIScene fail to
-  launch. UIScene is enabled by default (since Flutter 3.41) and the
-  Flutter CLI automatically migrates apps with an unmodified `AppDelegate`. Watch the build
-  log for `Finished migration to UIScene lifecycle` (success) or migration warnings (manual
-  work required).
+- **Minimum iOS deployment target: at least the minimum your Flutter version supports.** Read
+  it from the `ios/Podfile` that a fresh `flutter create` writes, or from the build error a
+  too-low target produces. Set `platform :ios, '<min>'` in `ios/Podfile` and the same value as
+  the iOS Deployment Target in Xcode (Build Settings). Do the same for macOS
+  (`platform :osx, '<min>'` in `macos/Podfile`; see 5.5.2). Record the chosen minimum in
+  `docs/PROJECT_PROFILE.md`.
+- **Two separate Apple rules — check both before each release:**
+  - **Upload SDK minimum.** App Store Connect accepts only builds made with a recent Xcode /
+    iOS SDK, and Apple raises it every year (`developer.apple.com/news/upcoming-requirements`).
+  - **UIScene lifecycle.** Apple announced that UIKit apps built with the SDK released after
+    iOS 26 must use the UIScene lifecycle, or they will not launch. Adopt UIScene before you
+    build with such an SDK.
+- **Flutter support for UIScene.** Current Flutter templates use UIScene, and the Flutter CLI
+  migrates apps with an unmodified `AppDelegate` automatically on `flutter run` /
+  `flutter build ios`. Watch the build log for `Finished migration to UIScene lifecycle`
+  (success) or migration warnings (manual work required). If your Flutter has no UIScene
+  support, upgrade Flutter first.
 - **For projects with a customized `AppDelegate`** (analytics initialization, deep link
-  handlers, custom plugin registration) the migration is manual:
+  handlers, custom plugin registration, method channels) the migration is manual:
   - `AppDelegate` must adopt `FlutterImplicitEngineDelegate`.
-  - Plugin registration must move from `application:didFinishLaunchingWithOptions:` to a
-    new `didInitializeImplicitFlutterEngine` callback.
+  - Plugin registration, method channels and platform views move from
+    `application:didFinishLaunchingWithOptions:` to
+    `didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge)`
+    (example in the flavors guide, "iOS Flavor Setup").
   - `Info.plist` must include a `UIApplicationSceneManifest` (Application Scene Manifest)
     entry. The Flutter migrator usually adds this automatically.
   - Plugin developers using lifecycle events must implement `FlutterSceneLifeCycleDelegate`
     and register via `registrar.addSceneDelegate(self)`.
 - See the official guide at `docs.flutter.dev/release/breaking-changes/uiscenedelegate` for
-  the full migration steps. Test on iOS 26 simulator/device before the next App Store
-  submission.
+  the full migration steps. Test on the newest iOS simulator and device before the next App
+  Store submission.
 
 #### iOS Flavors (Xcode Build Configurations And Schemes)
 
@@ -560,11 +589,12 @@ This section applies to each desktop platform the project declares. The shared r
 then one sub-section per platform (5.5.1 Windows, 5.5.2 macOS, 5.5.3 Linux). Store and
 direct-download release gates for each are in `platform_store_readiness.md`.
 
-Desktop targets do not use Android product flavors. Environment separation is achieved through
-`--dart-define=APP_FLAVOR=<value>` at build time (5.2), read by the `AppFlavorConfig` pattern from
-section 5.2. The dart-define name MUST be `APP_FLAVOR` (or any other non-reserved name) and
-MUST NOT be `FLUTTER_APP_FLAVOR` — that name is owned by the framework and any attempt to
-set it via `--dart-define` fails the build.
+Desktop targets do not use Android product flavors. Pass the flavor as described in 5.2,
+"Which Way To Pass The Flavor": `--flavor <name>` when `flutter build <platform> -h` lists it
+(and, on macOS, matching Xcode schemes exist), otherwise `--dart-define=APP_FLAVOR=<name>`.
+The `AppFlavorConfig` pattern reads either. A dart-define name MUST NOT be
+`FLUTTER_APP_FLAVOR` — that name is owned by the framework and any attempt to set it via
+`--dart-define` fails the build.
 
 Additional desktop setup required before any DB or FFI work can run (`sqflite` needs the FFI
 factory on Windows and Linux; macOS uses the normal plugin):
@@ -583,6 +613,11 @@ void main() async {
   runApp(const MyApp());
 }
 ```
+
+On Windows and Linux, `sqflite_common_ffi` also needs the SQLite native library at run time.
+Follow the package's setup (for example bundling it with a helper package such as
+`sqlite3_flutter_libs`, or installing `libsqlite3` as a Linux package dependency), and test the
+release build on a clean machine.
 
 **Window constraints** — set a minimum window size to prevent layouts breaking at small sizes.
 This section is the single reference for desktop setup; the flavors guide links here. If you also
@@ -612,8 +647,9 @@ Future<void> main() async {
 the root. Use the platform's modifier key (Cmd on macOS, Ctrl on Windows and Linux). Document all
 registered shortcuts in `docs/architecture.md`.
 
-**Context menus** — use `ContextMenuRegion` or `GestureDetector` with `onSecondaryTap` for
-right-click context menus on desktop. Do not assume touch-only interaction patterns.
+**Context menus** — for right-click menus on desktop, use `MenuAnchor` (opened from
+`GestureDetector.onSecondaryTapDown` at the pointer position) or `showMenu`. For text fields,
+use the built-in `contextMenuBuilder`. Do not assume touch-only interaction patterns.
 
 **Window resizing** — every screen MUST stay usable from the minimum window size up to a full
 4K screen. Use adaptive layouts (`LayoutBuilder`, breakpoints) instead of phone-only layouts.
@@ -647,10 +683,23 @@ msix_config:
 Build command:
 
 ```bash
-# `flutter pub run` was deprecated; the toolchain now requires `dart run`.
+# `flutter pub run` is deprecated; use `dart run`.
 dart run msix:create
 ```
 
+> **`msix:create` builds the app again unless told not to.** By default (`build_windows: true`)
+> it runs its own `flutter build windows`, **without** `--obfuscate`, `--split-debug-info` or
+> the flavor. A release package MUST therefore either:
+>
+> - set `build_windows: false` in `msix_config` and run `msix:create` right after the hardened
+>   `flutter build windows` command (it then packages that build), **or**
+> - pass the full hardened arguments in `windows_build_args`.
+>
+> `release_process.md` §11 uses the first way.
+
+- **Architecture**: one MSIX per architecture (`architecture: x64` or `arm64`). Flutter builds
+  Windows arm64 only on an arm64 Windows machine. Ship arm64 only if it is built and tested
+  there.
 - **Microsoft Store**: build with `store: true`, with `identity_name`, `publisher` and
   `publisher_display_name` copied exactly from Partner Center → Product identity.
 - **Direct download**: the MSIX (or an installer such as Inno Setup / WiX wrapping the release
@@ -697,18 +746,26 @@ A missing entitlement often works in debug and fails only in release. Test the r
   **notarization** with `xcrun notarytool` and **stapling** with `xcrun stapler`. An un-notarized
   app is blocked by Gatekeeper on users' Macs.
 
-**Flavors.** The `--dart-define=APP_FLAVOR=<name>` pattern (5.2) works on macOS and is the
-default. If a flavor needs its own bundle id or app name, add an Xcode scheme and xcconfig per
-flavor, the same way as iOS (5.4). Recent Flutter releases accept `--flavor` for macOS when a
-matching Xcode scheme exists — confirm with `flutter build macos -h` on the project's toolchain
-before relying on it. Either way, the two-variable `AppFlavorConfig` keeps working.
+**Flavors.** If a flavor needs its own bundle id or app name, add an Xcode scheme and xcconfig
+per flavor, the same way as iOS (5.4), and pass `--flavor <name>`. If dev and prod differ only
+in Dart behavior and there are no per-flavor schemes, pass `--dart-define=APP_FLAVOR=<name>`
+instead (5.2). Either way, the two-variable `AppFlavorConfig` keeps working.
+
+**CPU architectures.** A universal binary (arm64 + x86_64) still runs on Intel Macs. Flutter is
+reducing Intel Mac support: check `flutter build macos` for warnings about Intel hosts or
+universal builds, and the release notes for the current state. Shipping arm64 only is a
+documented product decision (record it in `docs/PROJECT_PROFILE.md`); when the toolchain
+supports it, `flutter config --enable-macos-arm64-only` builds arm64 only. Recent Xcode
+versions run only on Apple silicon build machines.
 
 **Secure storage** uses the Keychain (e.g. `flutter_secure_storage`); follow the plugin's macOS
 setup, which may require the Keychain Sharing capability.
 
 #### 5.5.3 Linux
 
-**Build machine.** Linux builds need the GTK toolchain. On Debian/Ubuntu:
+**Build machine.** Linux builds need the GTK toolchain. Install the packages listed in the
+current Flutter Linux setup page (`docs.flutter.dev/platform-integration/linux/setup`). When
+last checked, on Debian/Ubuntu that was:
 
 ```bash
 sudo apt-get install clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
@@ -748,7 +805,7 @@ Under `Production App Extension`, for each declared platform:
 |---|---|---|
 | Android | `.aab` (Google Play) | split APKs (`--split-per-abi`) |
 | iOS | `.ipa` via `flutter build ipa` → App Store Connect | — (Ad Hoc / Enterprise only) |
-| Windows | `.msix` / `.msixbundle` with `store: true` (Microsoft Store) | signed `.msix` or signed installer `.exe` |
+| Windows | `.msix` with `store: true`, one per shipped architecture (Microsoft Store) | signed `.msix` or signed installer `.exe` |
 | macOS | signed `.app` → `.pkg` uploaded to App Store Connect (Mac App Store) | Developer ID signed, notarized and stapled `.dmg` (or `.zip`) |
 | Linux | `.snap` (Snap Store), Flatpak (Flathub) | AppImage, `.deb`, `.rpm` |
 
@@ -773,17 +830,18 @@ This section applies to user-facing applications. It is advisory for infrastruct
 
 #### Material 3 Is The Default
 
-`useMaterial3: true` has been the default since Flutter 3.16 and the explicit flag is no
-longer needed in `ThemeData`. New projects automatically receive M3 styling. `useMaterial3:
-false` and Material 2 support are slated for deprecation per Flutter's deprecation policy —
-do not introduce new code that depends on M2 visuals.
+Material 3 is the default `ThemeData`; the explicit `useMaterial3: true` flag is not needed.
+`useMaterial3: false` and Material 2 are on Flutter's deprecation path — do not introduce new
+code that depends on M2 visuals.
 
-#### Material And Cupertino Packages (Flutter ≥ 3.47)
+#### Material And Cupertino Packages (`material_ui` / `cupertino_ui`)
 
-Since Flutter 3.47, Material and Cupertino ship as standalone `pub.dev` packages:
-`material_ui` and `cupertino_ui`. The copies inside the SDK
-(`package:flutter/material.dart`, `package:flutter/cupertino.dart`) are scheduled for formal
-deprecation in the next stable release.
+Material and Cupertino ship as standalone `pub.dev` packages, `material_ui` and
+`cupertino_ui`. The copies inside the SDK (`package:flutter/material.dart`,
+`package:flutter/cupertino.dart`) are frozen and on Flutter's deprecation path. Upstream,
+moving to the packages is opt-in for now; **this standard makes it a MUST** so every app is on
+the maintained code. A project on a Flutter version that has no `material_ui` package keeps the
+SDK imports until it upgrades (5.3, "Known migrations").
 
 - Every app MUST depend on `material_ui` (and `cupertino_ui` if it uses any Cupertino
   widget or the Cupertino localization delegate), with a caret (`^`) constraint on the current
@@ -802,6 +860,13 @@ deprecation in the next stable release.
 - Migrate existing code with `dart fix --apply --code=migrate_design_widgets`. The `--code`
   part is required; plain `dart fix --apply` does not run this migration. If the tool adds
   `material_ui: any`, replace it with a caret (`^`) constraint.
+- **Dependencies that still use the SDK libraries.** While a package the app uses still
+  imports `package:flutter/material.dart`, wrap the app with `MaterialUiCompatibilityBridge`
+  in `MaterialApp.builder` (from `material_ui`), so those widgets still find the theme and
+  localizations. The bridge cannot fix API type mismatches: an SDK `ColorScheme`, `TextTheme`
+  and similar types are different types from the `material_ui` ones. A package whose public
+  API takes such types must be updated before the app can pass `material_ui` values to it.
+  Record such packages in `docs/architecture.md` §21.
 - Code samples in these guidelines that omit imports assume the `material_ui` import.
 
 ### 6.2 Widget Structure
@@ -882,13 +947,16 @@ Use the Material motion system as the default baseline.
 
 Rules:
 
-- Animations MUST respect `MediaQuery.of(context).disableAnimations`. If `true`, skip or
+- Animations MUST respect `MediaQuery.disableAnimationsOf(context)`. If `true`, skip or
   complete animations instantly.
 - Looping animations MUST be paused when the app is in the background (`AppLifecycleState.paused`).
-- Prefer animating `Transform` and `Opacity` over properties that trigger layout recalculation
-  (such as `Padding`, `SizedBox` dimensions, or `Align` factors). `Transform` and `Opacity` are
-  composited on the GPU and do not trigger layout or paint passes, which makes them cheaper by
-  default. Animating layout-affecting properties via `AnimatedPadding`, `AnimatedContainer`, or
+- Prefer animating transform and opacity over properties that trigger layout recalculation
+  (such as `Padding`, `SizedBox` dimensions, or `Align` factors). Use the transition widgets
+  driven by an `Animation` — `FadeTransition`, `ScaleTransition`, `SlideTransition`,
+  `RotationTransition` — or `AnimatedOpacity`. They update the compositing layer without a
+  rebuild or relayout. Do **not** animate by rebuilding a plain `Opacity` or `Transform`
+  widget with `setState` on every frame: that rebuilds and repaints the child each frame.
+  Animating layout-affecting properties via `AnimatedPadding`, `AnimatedContainer`, or
   `TweenAnimationBuilder` is a legitimate Flutter pattern and is not prohibited — it requires
   profiling evidence before shipping to confirm the frame budget is met on a mid-range device.
 - Use `AnimationController.dispose()` — always dispose controllers in `State.dispose()`.
@@ -921,14 +989,16 @@ Rules:
 
 - Every top-level `Scaffold` MUST be aware of safe areas. The `Scaffold` widget handles this for
   `appBar` and `bottomNavigationBar`. For custom full-screen layouts, wrap content with `SafeArea`.
-- Do not hardcode top or bottom padding. Always read from `MediaQuery.of(context).padding`.
+- Do not hardcode top or bottom padding. Read insets from `MediaQuery.paddingOf(context)` /
+  `MediaQuery.viewPaddingOf(context)`, or use `SafeArea`.
 - Test layouts on a device or emulator with a display notch, punch-hole camera, and gesture
   navigation bar. These three configurations expose the most common safe-area bugs.
-- For edge-to-edge designs on Android 15+: edge-to-edge is **enforced by default** for apps
-  targeting SDK 35+ on Android 15+. You cannot opt out without a documented compatibility
-  justification. Set `SystemChrome.setEnabledSystemUIMode` appropriately and ensure
-  `WindowInsetsController` padding is applied to your content via `MediaQuery`. Test on a
-  device with three-button navigation, gesture navigation, and tablet display cutout.
+- **Android edge-to-edge.** Apps that target API 35 or higher draw edge-to-edge on Android 15
+  and later. The temporary opt-out attribute stops working once the app targets API 36 on
+  Android 16 and later, so treat edge-to-edge as permanent: never rely on the system bars
+  padding the app. Flutter reports the system-bar and cutout insets through `MediaQuery`, so
+  `SafeArea` and the `Scaffold` handle them. Test with three-button navigation, gesture
+  navigation, and a tablet with a display cutout.
 
 ### 6.9 UX Rules For Production Apps
 
@@ -959,8 +1029,10 @@ user-facing features.
 
 ### 7.2 Color Contrast
 
-- Normal text (below 18 sp or 14 sp bold): minimum contrast ratio **4.5 : 1** (WCAG AA).
-- Large text (18 sp or above, or 14 sp bold): minimum contrast ratio **3.0 : 1** (WCAG AA).
+- Normal text: minimum contrast ratio **4.5 : 1** (WCAG AA).
+- Large text: minimum contrast ratio **3.0 : 1** (WCAG AA). WCAG defines large text in points:
+  18 pt, or 14 pt bold. In Flutter logical pixels (sp / dp) that is about **24 sp**, or about
+  **18.7 sp bold**. Text smaller than that is normal text.
 - Interactive component boundaries and focus indicators: minimum **3.0 : 1** against adjacent colors.
 - Never communicate information using color alone. Always pair color with a label, icon, or
   pattern.
@@ -970,19 +1042,22 @@ user-facing features.
 
 - Use `Semantics` widgets to provide labels for any custom widget that assistive technology cannot
   infer from its visual content.
-- Use `excludeSemantics: true` on decorative images and icons that carry no meaning.
+- Hide decorative images and icons that carry no meaning from assistive technology: use
+  `Image(excludeFromSemantics: true)` or wrap them in `ExcludeSemantics`. An `Icon` with no
+  `semanticLabel` is already silent.
 - Custom interactive widgets (gestures, custom painters, canvas) MUST provide `onTap`, `label`,
   and `hint` semantics.
-- `Tooltip` widgets automatically contribute to semantics on long-press. Every icon-only control
-  MUST have one — see 7.8, which is a hard requirement, not a suggestion.
+- A `Tooltip`'s message is always part of the semantics tree (screen readers announce it), not
+  only on long-press. Every icon-only control MUST have one — see 7.8, which is a hard
+  requirement, not a suggestion.
 - Use `MergeSemantics` when multiple widgets form a single logical unit (e.g. a list tile with an
   icon and a label).
 - Do not suppress semantics on content that communicates state (loading spinners, error badges).
 
 ### 7.4 Font And Text Scaling
 
-> **API note (Flutter ≥ 3.12).** `textScaleFactor` is deprecated and will be removed in a
-> future Flutter version. Use `TextScaler` instead. The new API supports Android 14's
+> **API note.** `textScaleFactor` is deprecated (it may be removed in your Flutter version
+> already). Use `TextScaler` instead. The new API supports Android 14's
 > non-linear font scaling, which the old single-double API cannot represent.
 >
 > | Old (deprecated) | New |
@@ -1070,8 +1145,9 @@ This applies to:
 | `FloatingActionButton` / `.small` / `.large` | `tooltip:` parameter |
 | `PopupMenuButton` | `tooltip:` parameter (and each item carries its own visible label) |
 | `DropdownButton` with an icon-only child | wrap in `Tooltip` |
-| Icon-only `InkWell`, `GestureDetector`, `IconSlider`, custom painters | wrap in `Tooltip(message: ...)` **and** provide `Semantics(label:, hint:)` |
-| `BottomNavigationBarItem`, `NavigationDestination`, `NavigationRailDestination` shown **without** a persistent visible label | `tooltip:` on the destination |
+| Icon-only `InkWell`, `GestureDetector`, a `Slider` with only icons around it, custom painters | wrap in `Tooltip(message: ...)` **and** provide `Semantics(label:, hint:)` |
+| `BottomNavigationBarItem`, `NavigationDestination` shown **without** a persistent visible label | `tooltip:` on the destination |
+| `NavigationRailDestination` shown **without** a visible label (`labelType: none`) | It has no `tooltip:` parameter. Its required `label` is the accessible name; also wrap the destination's `icon` in a `Tooltip` with the same localized text. |
 | `AppBar` actions, `SliverAppBar` actions, toolbar overflow buttons | `tooltip:` on each action |
 | `Chip` / `ListTile` trailing icon buttons | `tooltip:` on the button |
 
@@ -1177,8 +1253,10 @@ inputs, dialog buttons) render incorrectly on devices with non-English system lo
 import 'package:material_ui/material_ui.dart';
 
 MaterialApp(
-  // Since Flutter 3.47 GlobalMaterialLocalizations comes from material_ui, and
-  // `.delegates` already includes the Cupertino and Widgets delegates.
+  // GlobalMaterialLocalizations comes from material_ui; its `.delegates`
+  // list already includes the Cupertino and Widgets delegates.
+  // Do NOT use the generated AppLocalizations.localizationsDelegates list: it
+  // names the SDK's flutter_localizations Material/Cupertino delegates.
   localizationsDelegates: [
     AppLocalizations.delegate,
     ...GlobalMaterialLocalizations.delegates,
@@ -1203,8 +1281,9 @@ dependencies:
   intl: ^<current>          # take each <current> from pub.dev; never type a version from memory
 ```
 
-`flutter_localizations` is still required: `GlobalWidgetsLocalizations` and the generated
-`AppLocalizations` class still use it. Only the Material and Cupertino delegates moved.
+`flutter_localizations` is still required: the generated `AppLocalizations` file imports it,
+and the fallback delegate in 8.3.1 uses its `GlobalWidgetsLocalizations`. Only the Material
+and Cupertino delegates moved into `material_ui` / `cupertino_ui`.
 
 And in `pubspec.yaml` under `flutter:`:
 
@@ -1226,9 +1305,11 @@ output-class: AppLocalizations
 nullable-getter: false
 ```
 
-Since Flutter 3.32 the generated files always go into the source tree (next to the ARB files, or
-into `output-dir` if you set one). The old synthetic `package:flutter_gen` no longer exists: import
-`AppLocalizations` from `lib/l10n/` and do not add a `synthetic-package` line.
+The generated files go into the source tree (next to the ARB files, or into `output-dir` if you
+set one). Import `AppLocalizations` from `lib/l10n/` (for example
+`package:<your_app>/l10n/app_localizations.dart`). Do not use the old synthetic
+`package:flutter_gen` import and do not add a `synthetic-package` line; current Flutter no
+longer supports them.
 
 **Android App Bundle language splitting MUST be disabled** when the app has an in-app language
 picker (two or more declared languages), in `android/app/build.gradle.kts` (or `build.gradle`):
@@ -1375,7 +1456,7 @@ choose.
 // lib/l10n/fallback_localizations.dart
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
-// Material and Cupertino delegates come from material_ui / cupertino_ui (Flutter ≥ 3.47).
+// Material and Cupertino delegates come from material_ui / cupertino_ui.
 // Only the widgets-level delegate still lives in flutter_localizations.
 import 'package:flutter_localizations/flutter_localizations.dart'
     show GlobalWidgetsLocalizations;
@@ -1795,7 +1876,9 @@ Map<String, String> _strings(String path) {
 - Never use `left` and `right` for padding, alignment, or positioning of UI elements. Use `start`
   and `end` equivalents: `EdgeInsetsDirectional`, `AlignmentDirectional`, `MainAxisAlignment.start`.
 - Icons that carry directional meaning (back arrow, forward arrow) MUST be mirrored in RTL.
-  Use `Directionality.of(context)` or set `textDirection` in `Icon` semantics.
+  Many directional `Icons.*` (for example `Icons.arrow_back`) already mirror themselves. For
+  any other directional icon, use `Icon(..., matchTextDirection: true)`. `BackButton` and
+  `Icons.adaptive.*` handle this for you.
 - **If any declared language is RTL** (Arabic `ar`, Hebrew `he`, Persian `fa`, Urdu `ur`, …), every
   screen MUST be checked in that language, and widget tests MUST run under it.
 - **If no declared language is RTL**, these rules are about staying ready: test RTL by wrapping a
@@ -1835,7 +1918,7 @@ NumberFormat.currency(locale: locale, symbol: '€').format(amount);
 Register a `WidgetsBindingObserver` at a high level in the widget tree (typically at the root
 provider or app widget level) to respond to system lifecycle events.
 
-> **Modern alternative (Flutter ≥ 3.13).** `AppLifecycleListener` is the recommended
+> **Modern alternative.** `AppLifecycleListener` is the recommended
 > replacement for `WidgetsBindingObserver` when the only thing being observed is lifecycle
 > state (no metrics, locale, accessibility, or memory-pressure callbacks). It is a regular
 > Dart object — no mixin, no widget tree mounting — and exposes typed callbacks
@@ -1915,30 +1998,35 @@ class AppLifecycleService with WidgetsBindingObserver {
 
 ### 10.0 Rendering Engine: Impeller
 
-Impeller is the default Flutter rendering engine on **iOS** (no Skia opt-out as of Flutter
-3.38), on **Android API 29+** (since Flutter 3.27), and on **desktop — macOS, Windows and
-Linux** (since Flutter 3.47, with the Skia fallback options being removed). On older Android
-devices and devices without Vulkan, Flutter falls back to the legacy OpenGL renderer
-automatically; no app code changes are required. Windows apps MUST be smoke-tested on
-Impeller after the 3.47 upgrade.
+Impeller is Flutter's rendering engine. Which platforms use it by default, and which still
+allow a fallback, depends on the Flutter version — check the release notes of the version the
+project uses. When last checked (2026-10), Impeller was the default on iOS (no opt-out), on
+Android devices with Vulkan (others fall back to OpenGL automatically), and on macOS (Metal),
+Windows and Linux (Vulkan). No app code changes are needed to use it.
 
-What this means in practice for an app team:
+Rules:
 
+- **Test every declared platform on Impeller** after each Flutter upgrade that changes the
+  renderer for that platform, especially desktop and custom drawing.
 - **Shader compilation jank is eliminated** for the standard widget set. Custom fragment
-  shaders MUST be tested under Impeller on both Metal (iOS) and Vulkan (Android), as the
-  shader pipeline differs from Skia. File any rendering regressions under Impeller against
-  `flutter/flutter` rather than working around them.
+  shaders MUST be tested under Impeller on every declared platform's backend (Metal, Vulkan,
+  OpenGL fallback), as the shader pipeline differs from Skia. File any rendering regressions
+  under Impeller against `flutter/flutter` rather than working around them.
 - **Disabling Impeller** is a deliberate, documented decision — it is not a default tuning
-  knob. On Android, `<meta-data android:name="io.flutter.embedding.android.EnableImpeller"
-  android:value="false" />` in `AndroidManifest.xml` opts out. iOS no longer supports
-  opt-out. Disabling Impeller anywhere else MUST be justified in `architecture.md §20
-  Decisions And Tradeoffs`.
+  knob — and is only possible where your Flutter version still has the switch. Known
+  switches (check they still exist before relying on one):
+  - Android: `<meta-data android:name="io.flutter.embedding.android.EnableImpeller"
+    android:value="false" />` in `AndroidManifest.xml`.
+  - macOS: `FLTEnableImpeller` = `false` in `macos/Runner/Info.plist`.
+  - Windows: `project.set_impeller_switch(flutter::ImpellerSwitch::Disabled)` in
+    `windows/runner/main.cpp`.
+  - Linux: `fl_dart_project_set_enable_impeller(project, FALSE)` in
+    `linux/runner/my_application.cc`.
+  - iOS: no opt-out.
 
-  > **Shelf-life note.** The Android opt-out was deprecated in Flutter 3.38 and the official
-  > 2026 roadmap commits to removing the Skia backend on Android 10+ during the year. Treat
-  > this escape hatch as a short-lived workaround, not as a stable architectural option;
-  > any code or test infrastructure that depends on it MUST have a migration plan recorded
-  > in `architecture.md §21 Known Risks`.
+  Every opt-out MUST be justified in `architecture.md §20 Decisions And Tradeoffs` and have a
+  removal plan in `architecture.md §21 Known Risks`: Flutter is removing these fallbacks, so
+  treat them as short-lived workarounds.
 - **Binary size note.** Pre-compiled shaders make the binary slightly larger than a Skia
   build. This is accounted for in the size budget (§10.7) but worth flagging when comparing
   pre/post-Impeller builds.
@@ -2041,8 +2129,8 @@ complete well within the frame budget.
 
 - The cold startup time target for release builds is under **2 seconds** to first meaningful
   frame on a mid-range device.
-- Use `flutter build apk --analyze-size` or `flutter build appbundle --analyze-size` to track
-  binary size after each significant dependency addition.
+- Track binary size with a size-analysis build after each significant dependency addition
+  (10.7).
 - Defer non-critical initialization. Services that are not needed on the first screen SHOULD be
   initialized lazily (on first use), not eagerly in `main()`.
 - Avoid synchronous disk reads in `main()`. Database migrations and file reads MUST be async.
@@ -2064,8 +2152,24 @@ Under `Production App Extension`:
 These are starting budgets only for the platforms the project declares; a project MAY set its own
 in `docs/PROJECT_PROFILE.md`. Exceeding the hard limit requires a documented justification in the release checklist.
 
-Track size with `--analyze-size` output at each local release build (CI does not build releases, §19.3). Record the baseline at project start and
-diff on each release.
+Track size locally at each release (CI does not build releases, §19.3). Record the baseline at
+project start and diff on each release. Two ways, both valid:
+
+- **Measure the real artifact** you will ship (APK/AAB/IPA/MSIX/DMG file size; Play Console and
+  App Store Connect also report download size).
+- **A size-analysis build** for a per-package breakdown. `--analyze-size` is a **separate,
+  throw-away build**: `flutter build -h` says it cannot be combined with `--split-debug-info`
+  (so not with `--obfuscate` either), and on Android it needs a single ABI. It writes into the
+  same output folders as the release build, so run it **before** the hardened release build,
+  or copy the hardened artifacts out first. Never ship the analysis build. Example:
+
+  ```bash
+  flutter build apk --release --target-platform android-arm64 --analyze-size \
+    --code-size-directory=build/size-analysis/
+  ```
+
+  Open the result with `dart devtools` → App Size. `release_process.md` §6.3 has the command
+  for each platform.
 
 ---
 
@@ -2137,7 +2241,7 @@ Future<void> main() async {
 > navigation, no repeated pushes. Keep `FlutterError.onError` for logging only. This satisfies
 > the "show a safe screen in release" requirement more robustly than a route push would.
 >
-> **`PlatformDispatcher.instance.onError` vs `runZonedGuarded`.** Since Flutter 3.3,
+> **`PlatformDispatcher.instance.onError` vs `runZonedGuarded`.** In current Flutter,
 > `PlatformDispatcher.instance.onError` is the recommended way to catch top-level async errors
 > and replaces wrapping `runApp` in `runZonedGuarded`. Use one, not both — running both can
 > double-report errors and cause zone conflicts.
@@ -2333,7 +2437,11 @@ final Map<int, Future<void> Function(Database)> _migrations = {
 
 Rules:
 - Migrations are append-only. Never modify a migration that has already been shipped.
-- Each migration MUST be atomic. Wrap multi-statement migrations in a transaction.
+- Each migration MUST be atomic. sqflite already runs `onCreate`, `onUpgrade` and
+  `onDowngrade` inside one transaction, so all migration steps run in that transaction — use
+  the `db` passed to the callback and do **not** open a second `db.transaction(...)` inside
+  it. Outside sqflite (another database package), wrap each multi-statement migration in a
+  transaction yourself.
 - Migrations MUST be covered by integration tests that exercise the upgrade path from the minimum
   supported version to the current version.
 - The current schema version MUST be documented in `docs/architecture.md`.
@@ -2350,7 +2458,8 @@ await openDatabase(
   version: schemaVersion,
   onConfigure: (db) async {
     await db.execute('PRAGMA foreign_keys = ON;');
-    await db.execute('PRAGMA journal_mode=WAL;');
+    // journal_mode returns a row, so use rawQuery: execute() fails on Android.
+    await db.rawQuery('PRAGMA journal_mode=WAL;');
   },
   onCreate: ...,
   onUpgrade: ...,
@@ -2557,10 +2666,12 @@ financial data, recovery codes, or local encrypted stores.
 - Cryptographic formats SHOULD be versioned so migrations remain possible.
 - Clipboard use for secrets SHOULD be time-bounded or explicitly communicated.
 - Screenshot and screen-recording protection MUST be enabled:
-  - Android: `FlutterWindowManager` or `FLAG_SECURE` via method channel.
+  - Android: set `WindowManager.LayoutParams.FLAG_SECURE` on the window — in `MainActivity`,
+    through a method channel, or with a maintained plugin. (The old `flutter_windowmanager`
+    plugin is no longer maintained; do not add it.)
   - iOS: Overlay an opaque view on the appropriate "will resign active" hook —
-    `sceneWillResignActive(_:)` after the UIScene migration (mandatory for iOS 26 SDK builds),
-    or `applicationWillResignActive` for legacy `AppDelegate`-only projects.
+    `sceneWillResignActive(_:)` for apps on the UIScene lifecycle (5.4), or
+    `applicationWillResignActive` for apps not yet migrated.
 - App lock, background lock, and session-expiry behavior MUST be explicit in app state.
 - Export of sensitive data SHOULD be encrypted by default; plaintext export, if allowed, MUST be
   explicit and user-confirmed.
@@ -2693,8 +2804,8 @@ These are prompts to review, not automatic failures.
 - Remove unused dependencies promptly.
 - For offline-only apps: audit every new dependency to verify it does not introduce transitive
   HTTP or network activity. Run `dart pub deps` and inspect for unexpected network packages.
-- **Build hooks (Dart ≥ 3.10).** Dart packages can integrate native build steps directly
-  via stable build hooks. Any new dependency that uses build hooks (`hook/build.dart`,
+- **Build hooks.** Dart packages can run native build steps through build hooks (stable in
+  current Dart; check `dart --version` and the Dart release notes). Any new dependency that uses build hooks (`hook/build.dart`,
   `hook/link.dart`) MUST be reviewed: native code in dependencies has the same supply-chain
   implications as native plugins, plus the additional surface of arbitrary code running at
   package resolution time. Run `dart pub deps --style=tree` and review every package whose
@@ -2708,8 +2819,12 @@ Under `Production App Extension`:
   individually.
 - Run `dart pub deps --style=tree` at least quarterly to inspect the full transitive dependency
   tree for unexpected additions.
-- Run `flutter pub licenses` before the first public release and on any release that adds new
-  dependencies. Verify all transitive licenses are compatible with your distribution model.
+- Check dependency licenses before the first public release and on any release that adds new
+  dependencies. There is no built-in `flutter pub` command for this: list the direct and
+  transitive packages with `dart pub deps --style=list`, then read each package's license on
+  pub.dev (or use a license-listing package and keep its output with the release evidence).
+  Verify all licenses are compatible with your distribution model. The app's own
+  `showLicensePage` / `LicensePage` shows the licenses Flutter collected at build time.
 - Pin critical security dependencies (encryption, secure storage) to exact versions in
   `pubspec.yaml` and update them deliberately after reviewing changelogs.
 
@@ -2723,14 +2838,14 @@ Under `Production App Extension`:
 |-------------|-----------------|-----------|
 | Photographs, complex gradients | WebP (lossy) | 25–35% smaller than JPEG at equal quality |
 | Logos, UI illustrations with transparency | WebP (lossless) or SVG | Smaller than PNG; SVG preferred if vector |
-| Icons (monochrome or multi-color) | SVG via `flutter_svg` | Resolution-independent, tree-shakeable |
+| Icons (monochrome or multi-color) | SVG via `flutter_svg` | Resolution-independent |
 | Raster fallback (when SVG not viable) | PNG with 2x/3x variants | Only when SVG cannot achieve the result |
 
 Never use JPEG for UI assets that require transparency.
 
-#### Per-Platform Asset Bundling (Flutter ≥ 3.41)
+#### Per-Platform Asset Bundling
 
-`pubspec.yaml` supports a `platforms:` filter on individual asset entries, letting heavy
+When your Flutter supports it, `pubspec.yaml` accepts a `platforms:` filter on individual asset entries, letting heavy
 platform-specific assets be excluded from builds for other platforms. This is the preferred
 way to ship desktop-only or web-only assets without bloating mobile binaries.
 
@@ -2745,7 +2860,8 @@ flutter:
 ```
 
 Use this whenever an asset is only meaningful on a subset of target platforms; the size
-budget (§10.7) thanks you.
+budget (§10.7) thanks you. If `flutter pub get` rejects the `platforms:` key, the project's
+Flutter does not support it yet — keep a plain asset list until it is upgraded.
 
 ### 17.2 Resolution Variants
 
@@ -2763,24 +2879,26 @@ assets/images/
     `-- hero_banner.webp       # 3x
 ```
 
-Register in `pubspec.yaml`:
+Register only the main folder in `pubspec.yaml`. Flutter finds the `2.0x/` and `3.0x/`
+variants by itself and picks the right one for each screen:
 
 ```yaml
 flutter:
   assets:
     - assets/images/
-    - assets/images/2.0x/
-    - assets/images/3.0x/
 ```
 
 ### 17.3 Icon Font Tree Shaking
 
-Flutter's `--tree-shake-icons` build flag removes unused Material icons from the binary. It
-activates automatically in release builds when icons are referenced via `const` constructors.
+Icon tree shaking (`--tree-shake-icons`, on by default in release builds) removes unused icon
+glyphs from icon fonts. It works only when every `IconData` the app uses is a compile-time
+constant.
 
-- Always use `const Icon(Icons.add)`, never `Icon(Icons.add)` with a variable.
-- Never reference icon code points via integer literals. The tree shaker cannot analyze integer
-  references.
+- Use the constant `IconData` values: `Icons.add`, `CupertinoIcons.share`, or your own
+  `static const IconData` fields. `Icon(Icons.add)` is fine with or without `const`.
+- Never build an `IconData` at run time (for example `IconData(codePointFromJson)`). The build
+  then fails with a non-constant `IconData` error, or tree shaking must be turned off
+  (`--no-tree-shake-icons`), which ships the whole font.
 - Custom icon fonts MUST be subset to include only the glyphs actually used. Use a font subsetting
   tool (e.g. `fonttools`, `glyphhanger`) before committing font files.
 
@@ -2880,30 +2998,60 @@ is a common store rejection.
 
 Under `Production App Extension`:
 
-- Use `flutter test --profile` with `WidgetTester.runAsync` for widget-level performance checks.
-- For frame-rate regression testing, use Flutter's integration test `traceAction` API to collect
-  frame timing:
+- Measure performance on a real device or emulator in **profile mode**, never in widget tests
+  (`flutter test` runs in debug mode on the host, so its timings mean nothing).
+- For frame-rate regression testing, use the `integration_test` package and record frame
+  timings with `watchPerformance` (or `traceAction` for a full timeline):
 
   ```dart
-  final timeline = await driver.traceAction(() async {
-    // Scroll through a long list.
-    await driver.scroll(listFinder, 0, -5000, const Duration(seconds: 2));
+  // integration_test/scroll_perf_test.dart
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('long list scrolls smoothly', (tester) async {
+    await tester.pumpWidget(const MyApp());
+    final list = find.byType(Scrollable).first;
+    await binding.watchPerformance(() async {
+      await tester.fling(list, const Offset(0, -5000), 3000);
+      await tester.pumpAndSettle();
+    }, reportKey: 'scroll_timing');
   });
-  final summary = TimelineSummary.summarize(timeline);
-  expect(summary.computePercentileFrameBuildTimeMillis(90), lessThan(16.0));
   ```
 
+  ```dart
+  // test_driver/perf_driver.dart — writes the summary to build/
+  import 'package:integration_test/integration_test_driver.dart';
+
+  Future<void> main() => integrationDriver(
+        responseDataCallback: (data) async {
+          if (data != null) {
+            await writeResponseData(data['scroll_timing'] as Map<String, dynamic>,
+                testOutputFilename: 'scroll_timing');
+          }
+        },
+      );
+  ```
+
+  ```bash
+  flutter drive --profile \
+    --driver=test_driver/perf_driver.dart \
+    --target=integration_test/scroll_perf_test.dart
+  ```
+
+  Compare `90th_percentile_frame_build_time_millis` and
+  `90th_percentile_frame_rasterizer_time_millis` in the report with the frame budget (10.1).
 - Capture and store performance baseline results. Treat regressions beyond 20% as blocking.
 
-### 18.5 Widget Previews (Flutter ≥ 3.35, Stable Since 3.47)
+### 18.5 Widget Previews
 
-Flutter Widget Previews render annotated widgets in a dedicated VS Code or Android
-Studio panel without launching the full app. It is faster feedback than running widget
-tests for visual iteration. The feature is **stable** since Flutter 3.47, but it is still not
-a substitute for widget tests, golden tests, or integration tests.
+Flutter Widget Previews render annotated widgets in a dedicated IDE panel without launching
+the full app. It is faster feedback than running widget tests for visual iteration. Check
+that the project's Flutter and IDE plugin support it (the `@Preview` annotation exists in
+`package:flutter/widget_previews.dart`). It is never a substitute for widget tests, golden
+tests, or integration tests.
 
 ```dart
-import 'package:flutter/widgets.dart';
+import 'package:flutter/widget_previews.dart'; // @Preview
+import 'package:flutter/widgets.dart';         // Widget
 
 @Preview(name: 'Empty state — light')
 Widget previewEmptyStateLight() => const TodoEmptyState(theme: AppTheme.light);
@@ -2949,7 +3097,9 @@ Rules:
 
 - The workflow uses no secrets and the least permissions (`permissions: contents: read`).
 - One `ubuntu-latest` runner is enough; checks do not need a per-platform runner.
-- Pin the Flutter version or channel the project uses, so CI and contributors agree.
+- Pin the exact Flutter version the project uses (the one recorded in `CLAUDE.md` /
+  `AGENTS.md`), so CI and contributors agree. `channel: stable` alone follows every new
+  release and can break CI without any change in the repository.
 
 Example `.github/workflows/ci.yml`:
 
@@ -2968,9 +3118,11 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4          # Dependabot keeps action versions current (19.2)
       - uses: subosito/flutter-action@v2
-        with: { channel: stable }
+        with:
+          channel: stable
+          flutter-version: <x.y.z>         # the exact version pinned in CLAUDE.md / AGENTS.md
       - run: flutter pub get
       - run: dart run build_runner build --delete-conflicting-outputs   # Only if using code gen
       - run: dart format --output=none --set-exit-if-changed .

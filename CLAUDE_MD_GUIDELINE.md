@@ -179,16 +179,22 @@ flutter build apk --flavor prod --release \
 flutter build appbundle --flavor prod --release \
   --obfuscate --split-debug-info=build/symbols/android-prod-<version>/
 
-# Other declared platforms — keep only the ones this app ships
+# Other declared platforms — keep only the ones this app ships.
+# Desktop: write the flag this project uses (--flavor prod, or --dart-define=APP_FLAVOR=prod
+# where `flutter build <platform> -h` has no --flavor / macOS has no per-flavor schemes).
 flutter build ipa --flavor prod --release \
   --obfuscate --split-debug-info=build/symbols/ios-prod-<version>/
-flutter build windows --release --dart-define=APP_FLAVOR=prod \
+flutter build windows --release --flavor prod \
   --obfuscate --split-debug-info=build/symbols/windows-prod-<version>/
-flutter build macos --release --dart-define=APP_FLAVOR=prod \
+dart run msix:create          # msix_config has build_windows: false — packages the build above
+flutter build macos --release --flavor prod \
   --obfuscate --split-debug-info=build/symbols/macos-prod-<version>/
-flutter build linux --release --dart-define=APP_FLAVOR=prod \
+flutter build linux --release --flavor prod \
   --obfuscate --split-debug-info=build/symbols/linux-prod-<version>/
 ```
+
+> Size analysis (`--analyze-size`) is a separate throw-away build: run it before the release
+> build, never ship it (`docs/release_process.md` §6.3).
 
 > If the app defines flavors, a bare `flutter run` fails — always pass `--flavor`.
 
@@ -201,9 +207,11 @@ flutter build linux --release --dart-define=APP_FLAVOR=prod \
 | dev | <id>.dev | <App Name> Dev | Debug keystore (automatic) |
 | prod | <id> | <App Name> | Release keystore (android/key.properties) |
 
-> Android and iOS: `--flavor <name>` only — Flutter sets `FLUTTER_APP_FLAVOR` itself; never pass it
-> with `--dart-define`. Desktop: `--dart-define=APP_FLAVOR=<name>`. `AppFlavorConfig` reads both
-> (engineering standard §5.2).
+> Use `--flavor <name>` on every platform where `flutter build <platform> -h` lists it and the
+> native setup exists; Flutter sets `FLUTTER_APP_FLAVOR` itself — never pass it with
+> `--dart-define`. Where `--flavor` is not available (or macOS has no per-flavor schemes), use
+> `--dart-define=APP_FLAVOR=<name>`. `AppFlavorConfig` reads both (engineering standard §5.2).
+> Record which one each declared platform uses here.
 
 ---
 

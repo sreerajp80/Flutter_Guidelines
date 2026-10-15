@@ -82,8 +82,9 @@ and `release_process.md` §9.
 - `compileSdkVersion` ≥ `targetSdkVersion`.
 - `minSdkVersion` is a deliberate, documented product decision — record it in `docs/architecture.md`.
 - 64-bit native code is mandatory: ship an App Bundle, or split APKs including `arm64-v8a`.
-- 16 KB page-size compliance is required for Android 15+ devices (see the engineering standard).
-- Edge-to-edge behavior verified when targeting SDK 35+.
+- 16 KB page-size compliance for apps targeting API 35+, checked on the release artifact
+  (engineering standard §5.3.1).
+- Edge-to-edge layout verified when targeting API 35+ (engineering standard §6.8).
 
 ### 2.3 Signing and upload
 
@@ -96,8 +97,11 @@ and `release_process.md` §9.
 - Signing config points at `android/key.properties` (see `docs/guidelines/guideline.md` §2) and is **never**
   committed.
 - `flutter build appbundle --release --obfuscate --split-debug-info=...` — all three flags, always.
-- Upload the native debug symbols (`build/symbols/`) to Play so crash traces de-obfuscate, and
-  archive them alongside the release evidence.
+- Archive the Dart symbol files from `build/symbols/` with the release evidence. They are used
+  with `flutter symbolize` (or a crash tool that accepts Flutter symbol files) to read
+  obfuscated Dart stack traces. Google Play does **not** use them. Play's separate "native
+  debug symbols" upload is for native (C/C++) `.so` symbols and is optional; to produce it, set
+  `ndk { debugSymbolLevel = "SYMBOL_TABLE" }` in the release build type.
 
 ### 2.4 Manifest, permissions, and policy declarations
 
@@ -107,9 +111,10 @@ and `release_process.md` §9.
   access, exact alarms, accessibility service, SMS/call log, background location, camera/microphone
   in the background, `QUERY_ALL_PACKAGES`.
 - Foreground services declare a `foregroundServiceType` and a use-case declaration in the console.
-- `android:debuggable=false` and `usesCleartextTraffic=false`. `android:allowBackup=false` is
-  MUST under the Sensitive Data Extension; other apps choose deliberately and record the choice in
-  `docs/security.md` §10 (`release_process.md` §6.4, §6.5).
+- `android:debuggable=false` and `usesCleartextTraffic=false`. Backup and device-transfer rules
+  (`allowBackup`, `dataExtractionRules`, `fullBackupContent`) are set deliberately; under the
+  Sensitive Data Extension, sensitive data is excluded from both cloud backup and device
+  transfer. Record the choice in `docs/security.md` §10 (`release_process.md` §6.4, §6.5).
 - No accidental `android:exported="true"` (`release_process.md` §6.7).
 - Ads, payments, and analytics SDKs are declared where the console asks for them.
 
@@ -270,7 +275,7 @@ declared channels. Build commands: `release_process.md` §11.
 | Product identity *(one-time)* | Copy **Package/Identity/Name**, **Package/Identity/Publisher** and **Package/Properties/PublisherDisplayName** exactly into `identity_name`, `publisher` and `publisher_display_name`. |
 | Signing | Set `store: true`. The Store signs the package — do not sign it yourself. |
 | Version | Store packages need the last (revision) part of `msix_version` to be `0`, e.g. `1.2.3.0`. |
-| Architectures | x64 at minimum; add arm64 for Windows on Arm devices (`.msixbundle` or one package per architecture). |
+| Architectures | x64 at minimum; add arm64 for Windows on Arm devices as a separate package in the same submission (the `msix` package builds one architecture per package; Flutter builds arm64 only on an arm64 machine). |
 | Privacy policy URL | Required when the app accesses the internet or personal data — which is almost every app. |
 | Age rating | IARC questionnaire completed. |
 | Store listing | Description, at least one screenshot per listing language (1366 × 768 or larger recommended), app icon/logos, category, support contact. One listing per declared language the Store supports. |
@@ -303,7 +308,7 @@ declared channels. Build commands: `release_process.md` §11A.
 | Version | Flutter sets `CFBundleShortVersionString` / `CFBundleVersion` from `pubspec.yaml`. |
 | Category | `LSApplicationCategoryType` set in `macos/Runner/Info.plist` (required by the Mac App Store). |
 | Minimum macOS | Podfile + Xcode deployment target ≥ the Flutter minimum (engineering standard §5.4). |
-| Architectures | Ship a universal binary (arm64 + x86_64); check with `lipo -archs`. Dropping Intel is a documented decision. |
+| Architectures | Universal (arm64 + x86_64) or arm64 only — a documented decision (engineering standard §5.5.2; Flutter is reducing Intel Mac support). Check the result with `lipo -archs`. |
 | Entitlements | Least privilege, set in **both** `DebugProfile.entitlements` and `Release.entitlements`; network client entitlement present if the app uses the network (engineering standard §5.5.2). |
 | Usage strings | `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`, etc. for every protected resource the app or a plugin uses. |
 | Privacy manifest | `PrivacyInfo.xcprivacy` included for App Store distribution, as for iOS (§3.3). |
@@ -318,8 +323,12 @@ declared channels. Build commands: `release_process.md` §11A.
 - Certificates: **Apple Distribution** (app) and **Mac Installer Distribution** (package), plus a
   Mac App Store provisioning profile. Never in git.
 - Build: `flutter build macos --release --obfuscate --split-debug-info=build/symbols/macos-prod-<version>/`
-  (plus `--dart-define=APP_FLAVOR=prod` when flavors are used), then open
+  (plus `--flavor prod` or `--dart-define=APP_FLAVOR=prod` when flavors are used), then open
   `macos/Runner.xcworkspace` in Xcode → Product → Archive → Distribute App → App Store Connect.
+  Archive right after that command: Xcode's Flutter build step reuses the flags from
+  `macos/Flutter/ephemeral/Flutter-Generated.xcconfig` (check it shows
+  `DART_OBFUSCATION=true` and a `SPLIT_DEBUG_INFO` path). Any other `flutter build` or
+  `flutter run` in between overwrites them.
 - Screenshots: 16:10, at one of the accepted sizes (e.g. 1280 × 800, 1440 × 900, 2560 × 1600,
   2880 × 1800); 1–10 per language.
 - App Privacy, export compliance (`ITSAppUsesNonExemptEncryption`), age rating, review notes, and
@@ -338,7 +347,8 @@ be signed, notarized and stapled.
    line:
 
    ```bash
-   # Sign (Xcode export usually does this) — hardened runtime + secure timestamp.
+   # Sign (Xcode export does this for you and is the safer path). Apple advises against
+   # --deep for signing; if you sign by hand, sign nested frameworks first, then the app.
    codesign --force --deep --options runtime --timestamp \
      --sign "Developer ID Application: <Team Name> (<TEAMID>)" "build/macos/Build/Products/Release/<App>.app"
 
@@ -409,6 +419,10 @@ the declared channels. Build commands: `release_process.md` §11B.
       flutter-target: lib/main.dart
   ```
 
+- The snapcraft `flutter` plugin runs its own `flutter build linux`. Make sure that build gets
+  `--obfuscate`, `--split-debug-info` and the flavor too (for example with an
+  `override-build` step), and archive its symbols — or package the hardened release bundle
+  you built yourself (for example with the `dump` plugin). Never ship an unhardened snap.
 - Build with `snapcraft`, test with `sudo snap install --dangerous ./<name>_<version>_<arch>.snap`,
   then upload with `snapcraft upload --release=edge` and promote to `beta` / `stable` after testing.
 - `confinement: strict` is required for normal store listing. Interfaces that need manual store
@@ -425,6 +439,8 @@ the declared channels. Build commands: `release_process.md` §11B.
 - Flathub builds in its own offline infrastructure. Check the current Flathub requirements for
   whether the manifest must build Flutter from source (vendoring the Flutter SDK and pub cache) or
   may package the release bundle you built locally; follow whichever they currently accept.
+  If the manifest builds from source, its `flutter build linux` command MUST include
+  `--obfuscate --split-debug-info=...` and the flavor, like every other release build.
 - `finish-args` least privilege: typically `--share=ipc`, `--socket=wayland`,
   `--socket=fallback-x11`, `--device=dri`, plus `--share=network` only if the app uses the
   network. Avoid broad `--filesystem=home`; use portals (file chooser) instead.

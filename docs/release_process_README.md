@@ -7,7 +7,7 @@ It is a **living release playbook** for your Flutter app. Unlike `architecture.m
 - The version format and how build numbers increment (Section 3)
 - Branch and merge policy, including hotfix strategy (Section 4)
 - The flavor × mode matrix for `dev` and `prod` builds across platforms (Section 5)
-- Mandatory release-build hardening — `--obfuscate`, `--split-debug-info`, R8/ProGuard rules, app size analysis, and Android manifest/asset security verifications (`debuggable=false`, `allowBackup` — `false` required for sensitive-data apps — cleartext traffic, asset audit) (Section 6)
+- Mandatory release-build hardening — `--obfuscate`, `--split-debug-info`, R8/ProGuard rules, app size analysis (a separate throw-away build, run before the hardened build), and Android manifest/asset security verifications (`debuggable=false`, backup and device-transfer rules — sensitive data excluded for sensitive-data apps — cleartext traffic, asset audit) (Section 6)
 - Signing material handling and keystore backup policy (Section 7)
 - The full pre-release checklist split across Code & Quality, Performance, Security, Product & Documentation, and Artifact Validation (Section 8)
 - Step-by-step Android, iOS, Windows, macOS and Linux release procedures with exact build commands (Sections 9, 10, 11, 11A, 11B)
@@ -69,7 +69,7 @@ When `release_process.md` is populated and placed in your project, an AI assista
 - Know the exact build command for each platform — including `--obfuscate`, `--split-debug-info=<path>`, `--split-per-abi`, and the size-analysis step — and never suggest a release build that omits any of them
 - Know the symbol archive policy and remind you to copy `build/symbols/` to the secure archive location after every prod build
 - Know the version-bump rule and update `pubspec.yaml` correctly when asked to prepare a release
-- Know the flavor matrix and use the right `--flavor` argument on Android/iOS or the right `--dart-define=APP_FLAVOR=<value>` on Windows (cross-referencing the build flavors guide)
+- Know the flavor matrix and use the flavor flag recorded for each platform — `--flavor`, or the `--dart-define=APP_FLAVOR=<value>` fallback where `--flavor` is not available (cross-referencing the build flavors guide)
 - Know the Section 8 checklist and walk through it item by item when you say "prepare release v1.2.3", rather than skipping ahead to the build command
 - Know the rollback policy and produce a hotfix branch with the correct naming pattern when an incident happens
 - Know that the full release checklist applies to hotfixes too — and not let "it's just a small fix" skip the obfuscation, symbol archival, or `android:debuggable=false` verification

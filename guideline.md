@@ -136,7 +136,7 @@ class LocalizedText {
         (_byLocale.values.isEmpty ? '' : _byLocale.values.first);
   }
 
-  /// Accepts a JSON string or a {"<lang>": ..., ...} map.
+  /// Accepts a JSON string or a `{"<lang>": ..., ...}` map.
   factory LocalizedText.fromJson(Object? raw, {String fallback = ''}) {
     if (raw is String) return LocalizedText.plain(raw);
     if (raw is Map) {
@@ -510,7 +510,7 @@ Every production build MUST be built using `--release`, `--obfuscate`, and `--sp
 
 #### Why these flags are required to secure the APK:
 1. **`--release`**: Enables AOT compiler optimizations, strips assertions and debug logic, and ensures `android:debuggable` is set to `false`.
-2. **`--obfuscate`**: Scrambles Dart class, method, and field identifiers into meaningless symbols within `libapp.so`, preventing trivial static analysis and decompilation of proprietary app logic.
+2. **`--obfuscate`**: Replaces Dart class, method, and field names in `libapp.so` with meaningless symbols. This makes casual static analysis harder; it is not a strong security boundary (`security.md` §8.1).
 3. **`--split-debug-info=<path>`**: Strips and extracts the symbol table into a separate directory outside the APK. **Mandatory** when `--obfuscate` is enabled; without archived symbol files, crash stack traces from production cannot be decoded.
 4. **`--split-per-abi`** (for APKs): Builds separate native binaries per CPU architecture (`arm64-v8a`, `armeabi-v7a`, `x86_64`) rather than an oversized "fat" universal APK.
 5. **`appbundle`** (for Google Play): Builds an Android App Bundle (`.aab`), from which Google Play serves device-optimized APKs and signs them with Play App Signing.
@@ -607,7 +607,11 @@ no flavors).
 
 > **Symbol archive reminder**: right after every production build, copy the symbols folder to a
 > secure archive **outside the repository**. Without it, production crash stack traces are
-> permanently unreadable.
+> permanently unreadable (decode them with `flutter symbolize`).
+
+> **Size analysis is a separate build.** `--analyze-size` cannot be combined with
+> `--split-debug-info` (or `--obfuscate`) and writes into the same output folders. Run it
+> before these commands, never after, and never ship its output (`release_process.md` §6.3).
 
 ### 2.5 Signing on the other platforms
 
@@ -718,8 +722,9 @@ Rules:
       language splitting (`bundle.language.enableSplit = false`) (**MUST**, engineering standard §8.1).
 - [ ] Every applicable language pack's checklist passes (**MUST**, §8.5).
 - [ ] Toolchain is the latest stable Flutter with the AGP / KGP / Gradle versions it generates
-      (Java 17 minimum), pinned in the project's own files — not copied from a guide or typed
-      from memory; `android/app/build.gradle.kts` uses `kotlin { compilerOptions { } }`, not
+      (and the JDK that AGP needs), pinned in the project's own files — not copied from a guide
+      or typed from memory; `android/gradle.properties` keeps the flags Flutter wrote;
+      `android/app/build.gradle.kts` uses `kotlin { compilerOptions { } }`, not
       `kotlinOptions` (**MUST**, engineering standard §5.3).
 - [ ] Material and Cupertino come from `material_ui` / `cupertino_ui`, with a caret (`^`) constraint; no
       `package:flutter/material.dart` or `package:flutter/cupertino.dart` imports remain
