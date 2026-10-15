@@ -7,13 +7,45 @@
 > declares it** (engineering standard §1.2.1).
 >
 > **AI agents:** read this file before writing code. If a value is still `<...>`, ask the user —
-> never guess an author, company, email, package id, platform, store or language.
+> never guess an author, company, email, package id, platform, store or language. Fill it in with
+> the intake in `AI_AGENT_START_HERE.md` §3.
+>
+> **Where each value came from.** A plain value was given by the user. A value the agent
+> suggested is marked `(proposed, confirmed by user)` — write it only after the user said yes. A
+> value nobody knows yet is written `TODO — needed before <gate>` (for example
+> `TODO — needed before first Google Play release`); never invent one.
 >
 > **Privacy:** this file is committed. Put only public information here — a public support
 > address, not a personal one if you do not want it published. Never put passwords, keys or
 > keystore details here.
 
 ---
+
+## 0. Product brief
+
+| Item | Value |
+|---|---|
+| What the app does | One line in §1 (short description); more detail here if needed |
+| Main features — first version | `<feature 1; feature 2; ...>` (one plan per feature, in this order) |
+| Who uses it | `<target users>` |
+| Out of scope for now | `<...>` or `none` |
+
+### 0.1 Data and privacy
+
+These answers decide the applicability profiles (§2) and the store privacy forms.
+
+| Item | Value |
+|---|---|
+| Works offline / needs the network | `<offline only / online / both>` |
+| Backend or third-party API | `<none / own backend / service name>` |
+| User accounts / sign-in | `<none / method>` |
+| Data the app stores, and where | `<what — device only / cloud>` |
+| Personal, health, finance or secret data | `<none / what>` — anything here means the Sensitive Data Extension |
+| Analytics | `<none / service>` |
+| Crash reporting | `<none / service>` |
+| Ads | `<none / network>` |
+| In-app purchases or subscriptions | `<none / what>` |
+| Device permissions | `<none>` or one per line: `<permission — why the app needs it>` |
 
 ## 1. Identity
 
@@ -82,6 +114,21 @@ Build flavors: `<none / dev + prod / dev + staging + prod>` (engineering standar
 | App size budget override (§10.7) | `<default or custom>` |
 | State management | `<Riverpod / Bloc / Provider / ...>` |
 | Structure tier (§3.1) | `<Tier 1 layer-first / Tier 2 feature-first>` |
+| Brand colours | `<seed colour / palette>` or `default theme` |
+| Theme modes | `<light + dark / light only / dark only>` |
+| App icon source | `<supplied by user / placeholder until supplied>` |
+
+## 7. Tools and workflow
+
+| Item | Value |
+|---|---|
+| AI agents used on the project | `<Claude Code / Gemini / Codex / other>` — decides the instruction files (`AI_AGENT_START_HERE.md` §4 step 3) |
+| IDE | `<...>` |
+| Can build iOS / macOS locally | `<yes / no / not needed>` — iOS and macOS builds need a Mac |
+| Git hosting | `<GitHub / other>` |
+| CI checks | `<yes — analyze/test and Dependabot only (engineering standard §19) / no>` |
 | Release owner (role) | `<role>` |
+
+Record roles and tool names only — no machine names, user names or local paths.
 
 A complete, worked example is in `profiles/example_en_ml_sa_profile.md`.

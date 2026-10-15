@@ -21,7 +21,8 @@ docs/guidelines/
    its version from the project. Only the user updates its version. If a guideline needs a
    change, see `docs/guidelines/DOCS_FOLDER_GUIDELINE.md` §1.1 "When the guidelines need a change".
 4. Copy `docs/guidelines/PROJECT_PROFILE_TEMPLATE.md` to `docs/PROJECT_PROFILE.md` and fill it in
-   (platforms, stores, languages, identity, About options). Copy the other templates
+   (product brief, platforms, stores, languages, identity, About options, tools) — an AI agent does
+   this with the intake in `docs/guidelines/AI_AGENT_START_HERE.md` §3. Copy the other templates
    (`architecture.md`, `security.md`, `release_process.md`) into `docs/` and create the rest of
    the baseline set (`DOCS_FOLDER_GUIDELINE.md` §6).
 5. Reference it from the app's mandatory root `CLAUDE.md` and `AGENTS.md` (e.g. "Follow the guidelines listed in
@@ -38,7 +39,7 @@ docs/guidelines/
 | Core documents | Relative path | What it is |
 |---|---|---|
 | AI agent entry point | `docs/guidelines/AI_AGENT_START_HERE.md` | Read order, new-app bootstrap, existing-app adoption, "ready for the stores" checklist. |
-| Project profile template | `docs/guidelines/PROJECT_PROFILE_TEMPLATE.md` | Template for this app's `docs/PROJECT_PROFILE.md` — identity, platforms, stores, languages, About options. |
+| Project profile template | `docs/guidelines/PROJECT_PROFILE_TEMPLATE.md` | Template for this app's `docs/PROJECT_PROFILE.md` — product brief and data use, identity, platforms, stores, languages, About options, tools. |
 | Common app conventions | `docs/guidelines/guideline.md` | About-screen JSON config, optional signature badge, Android release keystore rules (**source of truth for keystore rules**), signing on other platforms, baseline `lib/` layout. |
 | Engineering standard | `docs/guidelines/flutter_project_engineering_standard.md` | The master, project-agnostic rulebook — rules that apply to *every* app (structure, UI, accessibility, localization, performance, database, logging, security, desktop setup, CI, git, Definition of Done). |
 | Store readiness gates | `docs/guidelines/platform_store_readiness.md` | Release gates for Google Play, App Store, Microsoft Store, Mac App Store / Developer ID, Snap Store / Flathub / Linux packages. |

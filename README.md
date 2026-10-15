@@ -12,8 +12,31 @@ choices — platforms, stores, languages, author, About options — in one file,
 ## AI agents: start here
 
 Tell your AI agent: *"Follow the Flutter guidelines in `docs/guidelines/`, starting with
-`AI_AGENT_START_HERE.md`."* That page gives the read order, the bootstrap steps for a new app, and
-the release gates for each store.
+`AI_AGENT_START_HERE.md`."* That page gives the first checks, the intake questions for a new app,
+the read order, the bootstrap steps, and the release gates for each store.
+
+**Starter message for a new app.** First create the project folder, run `git init`, and add this
+set as a submodule at `docs/guidelines/` (see [GUIDELINES_MANIFEST.md](GUIDELINES_MANIFEST.md)).
+Then send this to any agent (Claude Code, Gemini, Codex, …), filling in what you know and deleting
+the rest:
+
+```text
+Read docs/guidelines/AI_AGENT_START_HERE.md and follow it. This is a new Flutter app.
+
+What I know so far:
+- What the app does: <one or two lines>
+- App name: <name>
+- Platforms and stores: <e.g. Android on Google Play, Windows on Microsoft Store>
+- Languages: <e.g. English only>
+- Tools: <AI agents and IDE you use>
+- Anything else: <publisher name, app id, colours, ...>
+
+Ask me for everything else you need, in one numbered list. Do not assume anything.
+Show me the filled-in project profile for approval before you create any files.
+```
+
+The agent records your answers in `docs/PROJECT_PROFILE.md`. You can answer "I don't know yet"; the
+agent then marks the item as a `TODO` for the release step that needs it.
 
 ## Templates and references
 
@@ -42,8 +65,8 @@ live in an app.
 
 | Document | What it is |
 |---|---|
-| [AI_AGENT_START_HERE.md](AI_AGENT_START_HERE.md) | Entry point for AI agents: read order, new-app bootstrap, existing-app adoption, "ready for the stores" checklist. |
-| [PROJECT_PROFILE_TEMPLATE.md](PROJECT_PROFILE_TEMPLATE.md) | Fill-in template for the app's `docs/PROJECT_PROFILE.md`: identity, platforms, stores, languages, About options. |
+| [AI_AGENT_START_HERE.md](AI_AGENT_START_HERE.md) | Entry point for AI agents: first checks, new-app intake questions, read order, new-app bootstrap, existing-app adoption, "ready for the stores" checklist. |
+| [PROJECT_PROFILE_TEMPLATE.md](PROJECT_PROFILE_TEMPLATE.md) | Fill-in template for the app's `docs/PROJECT_PROFILE.md`: product brief and data use, identity, platforms, stores, languages, About options, tools. |
 | [guideline.md](guideline.md) | Common app conventions: About-screen JSON config, optional signature badge, Android release keystore rules (**source of truth for keystore rules**), signing on other platforms, baseline `lib/` layout, new-app checklist. |
 | [flutter_project_engineering_standard.md](flutter_project_engineering_standard.md) | The master, project-agnostic rulebook — structure, UI, accessibility, localization, performance, database, logging, security, desktop setup, icons, CI, git, Definition of Done. |
 | [platform_store_readiness.md](platform_store_readiness.md) | Release gates for every store: Google Play, App Store, Microsoft Store, Mac App Store / Developer ID, Snap Store / Flathub / Linux packages. |

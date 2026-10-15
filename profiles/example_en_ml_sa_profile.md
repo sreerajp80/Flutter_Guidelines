@@ -8,6 +8,30 @@
 
 ---
 
+## 0. Product brief
+
+| Item | Value |
+|---|---|
+| What the app does | See §1 (short description) |
+| Main features — first version | Open PDF files from device storage; page view with zoom; highlights and notes saved on the device |
+| Who uses it | Readers who want a simple offline PDF reader in English, Malayalam or Sanskrit |
+| Out of scope for now | Cloud sync, PDF editing, printing |
+
+### 0.1 Data and privacy
+
+| Item | Value |
+|---|---|
+| Works offline / needs the network | Offline only |
+| Backend or third-party API | none |
+| User accounts / sign-in | none |
+| Data the app stores, and where | Highlights, notes and settings — device only |
+| Personal, health, finance or secret data | none |
+| Analytics | none |
+| Crash reporting | none |
+| Ads | none |
+| In-app purchases or subscriptions | none |
+| Device permissions | File access — to open the PDF the user picks (system file picker, no broad storage permission) |
+
 ## 1. Identity
 
 | Item | Value |
@@ -117,4 +141,17 @@ Example `assets/config/app_config.json` for this profile:
 | App size budget override | default |
 | State management | Riverpod |
 | Structure tier | Tier 1 layer-first |
+| Brand colours | default theme (proposed, confirmed by user) |
+| Theme modes | light + dark |
+| App icon source | supplied by user |
+
+## 7. Tools and workflow
+
+| Item | Value |
+|---|---|
+| AI agents used on the project | Claude Code |
+| IDE | Visual Studio Code |
+| Can build iOS / macOS locally | not needed |
+| Git hosting | GitHub |
+| CI checks | yes — analyze/test and Dependabot only |
 | Release owner (role) | app maintainer |

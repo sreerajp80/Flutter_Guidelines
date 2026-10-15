@@ -128,7 +128,7 @@ Read it before making any change. <If Thin: See the docs table below for full de
 | docs/release_process.md | Building a release, versioning, release checklist |
 | docs/guidelines/flutter_build_flavors_guide.md | Build config, signing, flavors, Gradle, ProGuard |
 | docs/guidelines/flutter_project_engineering_standard.md | Any code change — layers, naming, testing |
-| docs/PROJECT_PROFILE.md | Always — platforms, stores, languages, identity, About options |
+| docs/PROJECT_PROFILE.md | Always — product brief, platforms, stores, languages, identity, About options, tools |
 | docs/guidelines/guideline.md | About screen, Android keystore, `lib/` layout |
 | docs/guidelines/platform_store_readiness.md | Before any release; when touching permissions, entitlements, store-listed behavior |
 | docs/GUIDELINES_MANIFEST.md | The shared Flutter guidelines index |

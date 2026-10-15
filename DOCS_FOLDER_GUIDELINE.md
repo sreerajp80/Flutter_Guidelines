@@ -132,7 +132,7 @@ Write absolute dates (`2026-07-18`), never "today" or "last week".
 
 When generating or initializing the `docs/` folder for a new Flutter app, **always create the complete baseline set** of documents below. Do not omit any document from this initial set:
 
-1. **`PROJECT_PROFILE.md`** (Living) — Filled in from `PROJECT_PROFILE_TEMPLATE.md`: identity, target platforms, stores, declared languages, About options. Create it **first**; every other doc depends on it.
+1. **`PROJECT_PROFILE.md`** (Living) — Filled in from `PROJECT_PROFILE_TEMPLATE.md`: product brief and data use, identity, target platforms, stores, declared languages, About options, tools. Fill it in with the user through the intake in `docs/guidelines/AI_AGENT_START_HERE.md` §3. Create it **first**; every other doc depends on it.
 2. **`architecture.md`** (Living) — Technical design, layers, data models, and component boundaries.
 3. **`security.md`** (Living) — Security rules, permissions, threat model, and offline boundaries.
 4. **`release_process.md`** (Living) — Signing for every declared platform, versioning, build commands, store gates, and release runbook.
@@ -158,7 +158,7 @@ skeleton. Prefer these names over inventing new ones.
 
 | File (`snake_case`) | Kind | What it is | Typical sections |
 | --- | --- | --- | --- |
-| `PROJECT_PROFILE.md` | Living | The project's declared choices — identity, platforms, stores, languages, About options. Copy from the submodule's `PROJECT_PROFILE_TEMPLATE.md`. | Identity · Profiles · Platforms and distribution · Languages · About screen · Optional values |
+| `PROJECT_PROFILE.md` | Living | The project's declared choices — product brief, identity, platforms, stores, languages, About options, tools. Copy from the submodule's `PROJECT_PROFILE_TEMPLATE.md`. | Product brief · Identity · Profiles · Platforms and distribution · Languages · About screen · Optional values · Tools and workflow |
 | `architecture.md` | Living | The app's technical design — layers, packages, folder tree, key flows. Fill in from the submodule blueprint. | Project config · Design goals · Layered architecture · Packages · Folder structure · Theme · Key interactions · Non-functional requirements |
 | `security.md` (or `security_rules.md`) | Living | Security rules and/or blueprint — threat model, permissions, crypto, data handling. Short "rules" file may link to a fuller blueprint. | Boundaries/offline rules · Minimal permissions · Input validation · Secrets handling · OWASP/threat checklist |
 | `release_process.md` / `release_signing.md` | Living | How to build, sign, and ship a release. | Secrets warning callout · What the build expects · Generate keystore · `key.properties` · Build commands · Verify signature · Backup checklist |
