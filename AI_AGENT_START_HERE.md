@@ -162,8 +162,8 @@ approved plans; do not jump ahead.
    test (§8), About config + screen (`guideline.md` §1), language picker if 2+ languages (§8.4).
 5. **Platform identity.** Same app id on every platform; app name; icons and splash for every
    declared platform (§17.5); desktop setup per platform (§5.5); flavors if needed (§5.1).
-6. **CI.** GitHub CI runs only the analyze/test checks (§19.1) and Dependabot (§19.2). No release
-   builds, signing, or secrets in CI (§19.3).
+6. **CI.** GitHub CI runs only the analyze/test checks (§19.1). No Dependabot; dependencies are
+   updated by hand (§19.2). No release builds, signing, or secrets in CI (§19.3).
 7. **Features.** One plan per feature, in the order of the product brief (profile §0). Each
    feature is done only when the Definition of Done holds (§23) — tests, analyze clean, every
    declared language, tooltips, accessibility. If a feature needs a fact the profile does not
@@ -196,7 +196,7 @@ these are true:
 - [ ] `guideline.md` §4 checklist passes.
 - [ ] Engineering standard §23 Definition of Done holds for every merged change.
 - [ ] A hardened release (`--obfuscate --split-debug-info`) is built locally for every declared
-      platform; GitHub CI runs only the checks and Dependabot (engineering standard §19).
+      platform; GitHub CI runs only the checks (engineering standard §19).
 - [ ] Signing is set up for every declared platform, with no signing material in git
       (`guideline.md` §2, §2.5).
 - [ ] `platform_store_readiness.md` §1 passes, plus the section for each declared channel:

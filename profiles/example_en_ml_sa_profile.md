@@ -153,5 +153,5 @@ Example `assets/config/app_config.json` for this profile:
 | IDE | Visual Studio Code |
 | Can build iOS / macOS locally | not needed |
 | Git hosting | GitHub |
-| CI checks | yes — analyze/test and Dependabot only |
+| CI checks | yes — analyze/test only |
 | Release owner (role) | app maintainer |

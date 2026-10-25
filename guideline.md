@@ -756,7 +756,7 @@ Rules:
 - [ ] iOS / macOS / Windows / Linux: signing set up as in §2.5, with no signing material in git.
 - [ ] Every release build uses `--obfuscate` and `--split-debug-info`; debug symbols archived
       securely alongside the release artifacts.
-- [ ] GitHub CI runs only the analyze/test checks and Dependabot; release artifacts for every
+- [ ] GitHub CI runs only the analyze/test checks; release artifacts for every
       declared platform are built locally (engineering standard §19).
 - [ ] The readiness gate of every declared distribution channel passed before the first upload
       ([platform_store_readiness.md](platform_store_readiness.md)) (**MUST** for any app shipped

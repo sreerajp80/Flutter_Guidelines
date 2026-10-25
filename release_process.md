@@ -277,7 +277,7 @@ Inspect all declared activities, services, and broadcast receivers in the merged
 - Rules:
   - Signing material must not live in source control.
   - Local signing helpers must not expose secrets in committed files.
-  - GitHub CI never holds signing secrets; it runs only checks and Dependabot (engineering
+  - GitHub CI never holds signing secrets; it runs only checks (engineering
     standard §19).
   - Keystore files MUST be backed up in at least two separate secure locations.
     Losing the keystore means being unable to publish updates to the Play Store for that app.

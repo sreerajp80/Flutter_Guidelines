@@ -126,7 +126,7 @@ Build flavors: `<none / dev + prod / dev + staging + prod>` (engineering standar
 | IDE | `<...>` |
 | Can build iOS / macOS locally | `<yes / no / not needed>` — iOS and macOS builds need a Mac |
 | Git hosting | `<GitHub / other>` |
-| CI checks | `<yes — analyze/test and Dependabot only (engineering standard §19) / no>` |
+| CI checks | `<yes — analyze/test only (engineering standard §19) / no>` |
 | Release owner (role) | `<role>` |
 
 Record roles and tool names only — no machine names, user names or local paths.

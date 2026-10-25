@@ -253,7 +253,7 @@ the simplest approach for small projects.
 `dev` and `prod` flavors use completely separate keystores with different aliases. This
 guarantees a dev-signed APK can never be mistaken for or substitute a prod APK.
 
-Signing is never done in GitHub CI. CI runs only the analyze/test checks and Dependabot and
+Signing is never done in GitHub CI. CI runs only the analyze/test checks and
 holds no signing secrets (engineering standard §19.3). Release builds are signed locally.
 
 Whichever strategy is chosen: **document it explicitly** and commit that documentation. The

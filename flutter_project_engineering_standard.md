@@ -171,7 +171,7 @@ project/
 |-- lib/
 |-- test/
 |-- integration_test/         # Required only when end-to-end coverage applies
-|-- .github/                  # workflows/ci.yml (checks only) + dependabot.yml (§19)
+|-- .github/                  # workflows/ci.yml (checks only, §19)
 |-- CLAUDE.md                 # Mandatory project-root AI instructions (MUST)
 |-- AGENTS.md                 # Mandatory project-root instructions for other AI agents (MUST)
 |-- analysis_options.yaml
@@ -3070,10 +3070,11 @@ Rules:
 
 ---
 
-## 19. CI Standard (Checks And Dependabot Only)
+## 19. CI Standard (Checks Only)
 
-GitHub CI in **every** repository (all profiles) does exactly two things: it runs the
-analyze/test checks (19.1) and it runs Dependabot (19.2). Nothing else (19.3).
+GitHub CI in **every** repository (all profiles) does exactly one thing: it runs the
+analyze/test checks (19.1). Dependencies are updated by hand, not by a bot (19.2). Nothing else
+runs in CI (19.3).
 
 ### 19.1 Required CI Checks
 
@@ -3118,7 +3119,7 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4          # Dependabot keeps action versions current (19.2)
+      - uses: actions/checkout@v4          # Update action versions by hand (19.2)
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -3130,32 +3131,17 @@ jobs:
       - run: flutter test
 ```
 
-### 19.2 Dependabot
+### 19.2 Dependency Updates (Manual)
 
-Every repository MUST commit a `.github/dependabot.yml`:
+Projects do not use Dependabot or any other bot that opens update pull requests.
 
-- `pub` (the app's `pubspec.yaml` at the root) — MUST.
-- `github-actions` (the actions used in `.github/workflows/`) — MUST.
-- `gradle` for `android/` — MAY, if the project wants Gradle plugin updates as PRs.
-
-Dependabot pull requests pass the same 19.1 checks before merge, like any other pull request.
-Review a major-version update on its own (§16.6) and follow the project's plan → approve → log
-workflow before merging it; close the PR if it is not approved.
-
-Example `.github/dependabot.yml`:
-
-```yaml
-version: 2
-updates:
-  - package-ecosystem: "pub"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-```
+- Do not add `.github/dependabot.yml` (or a similar update-bot config) to the repository.
+- Update packages by hand, following §16.6: run `flutter pub outdated`, review each major
+  version update on its own, and follow the project's plan → approve → log workflow.
+- When you update packages, also check the versions of the GitHub Actions used in
+  `.github/workflows/` (for example `actions/checkout`) and update them by hand.
+- GitHub's security alerts for dependencies (a repository setting) MAY stay on. They need no
+  file in the repository.
 
 ### 19.3 What CI Must Not Do
 
@@ -3165,7 +3151,7 @@ GitHub CI MUST NOT:
 - sign anything, or hold signing material or store API keys as CI secrets;
 - upload to any store or distribution channel, or deploy anything;
 - create GitHub releases or tags, or bump versions;
-- run any other workflow besides the 19.1 checks and Dependabot.
+- run any other workflow besides the 19.1 checks.
 
 Release builds — with `--obfuscate` and
 `--split-debug-info=build/symbols/<platform>-<flavor>-<version>/` — signing, size checks,
