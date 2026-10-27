@@ -11,9 +11,10 @@ afterwards.
 > **Store rules change often.** Apple, Google, Microsoft, Canonical (Snap Store) and Flathub
 > update their requirements every year — target SDK levels, required Xcode versions, screenshot
 > sizes, privacy declarations. Numbers below were last checked in **2026-10** and are a starting
-> point. Before each release, check the store's current documentation and update this file (or
-> the project's local copy) when a rule has changed. Never assume a value already in the project
-> is still accepted.
+> point. Before each release, check the store's current documentation. When a rule has changed,
+> follow the store and tell the user, so they can update this file in the guidelines repository
+> (`DOCS_FOLDER_GUIDELINE.md` §1.1). A project never edits this file and never keeps a local
+> copy. Never assume a value already in the project is still accepted.
 
 | Section | Channel |
 |---|---|
@@ -24,6 +25,9 @@ afterwards.
 | 5 | macOS — Mac App Store and Developer ID direct download |
 | 6 | Linux — Snap Store, Flathub, and direct packages |
 | 7 | Recording the result |
+
+**Web** has no store gate. When a declared Web build is public, the §1 rules on privacy policy,
+data disclosure and testing the real build still apply. Release steps: `release_process.md` §11C.
 
 ---
 
@@ -36,9 +40,23 @@ These apply to every declared public distribution channel.
   the App Store, the Mac App Store, the Snap Store (snap name) or Flathub.
 - **Versioning**: `pubspec.yaml` `version: X.Y.Z+N` is the single source. The build number `N`
   strictly increases on every upload to any store and is never reused, even for a rejected build.
-- **Privacy policy**: a public, reachable, app-specific URL. Required by Google Play for every app,
-  and by the App Store and the Microsoft Store for almost every app; strongly recommended everywhere. Link it from the
-  About screen (`guideline.md` §1.6).
+- **Privacy policy**: a public, reachable, app-specific URL. Required by Google Play and the App
+  Store for every app, and by the Microsoft Store for almost every app; strongly recommended
+  everywhere. Link it from the About screen (`privacyPolicy` row — a MUST for public store apps,
+  `guideline.md` §1.6).
+  - **Where to host it.** Any public `https://` page works. Common choices: your website, GitHub
+    Pages, or `PRIVACY.md` at the root of a **public** GitHub repo, linked by its branch URL
+    (`https://github.com/<owner>/<repo>/blob/<default-branch>/PRIVACY.md`). Use the branch link,
+    not a link to one commit, so later edits show up. A file in the repo is not enough on its own;
+    the store needs the URL.
+  - The page MUST be public: no sign-in, not a private repo, not a PDF download, and not limited to
+    some countries.
+  - Do not rename or move the file, change the default branch name, or make the repo private — any
+    of these breaks the link, and a broken policy link is a store policy problem.
+  - Use **one URL everywhere**: `docs/PROJECT_PROFILE.md`, `privacyPolicy` in
+    `assets/config/app_config.json` (About screen), and every store console.
+  - The policy text MUST match the store data disclosures (Play Data safety, Apple App Privacy,
+    Microsoft Store privacy declaration).
 - **Data disclosure** matches reality — Play Data safety, Apple App Privacy, Microsoft Store
   privacy declaration, Flathub/Snap permissions. Include what bundled SDKs and plugins collect.
 - **Permissions are least-privilege** on every platform (Android permissions, iOS/macOS usage
@@ -52,8 +70,11 @@ These apply to every declared public distribution channel.
   misleading claims.
 - **Release build tested**: the exact artifact you upload was installed and its primary flow
   completed on a clean device or VM — not the debug build.
-- **Obfuscation and symbols**: every release uses `--obfuscate --split-debug-info=...`, and the
-  symbols are archived (`release_process.md` §6.1).
+- **Obfuscation and symbols**: every native release uses `--obfuscate --split-debug-info=...`,
+  and the symbols are archived (`release_process.md` §6.1).
+- **Security Baseline**: every line of `docs/security.md` §1.1 is `verified` or `n/a` with a
+  reason, and the OWASP checklist in `docs/security.md` §12 is signed off (engineering standard
+  §15.1, §15.3). No app is published with a known baseline gap.
 - **Support contact**: a public support address or URL is set in every store.
 
 ---
@@ -80,7 +101,8 @@ and `release_process.md` §9.
   is typically 31 August each year). Check the current requirement before each release rather than
   trusting the value already in the project.
 - `compileSdkVersion` ≥ `targetSdkVersion`.
-- `minSdkVersion` is a deliberate, documented product decision — record it in `docs/architecture.md`.
+- `minSdkVersion` is a deliberate, documented product decision — record it and its reason in
+  `docs/PROJECT_PROFILE.md` §3.
 - 64-bit native code is mandatory: ship an App Bundle, or split APKs including `arm64-v8a`.
 - 16 KB page-size compliance for apps targeting API 35+, checked on the release artifact
   (engineering standard §5.3.1).
@@ -132,6 +154,18 @@ and `release_process.md` §9.
   deletion path MUST exist and be declared.
 - **Developer contact details** and, for personal accounts created recently, Play's testing
   requirements before production access.
+- **EU trader status** — if the app is distributed in the European Union, the trader /
+  non-trader declaration (Digital Services Act) is completed in Play Console. Check the current
+  console wording.
+
+### 2.5A Direct APK downloads (outside Play)
+
+Applies when the profile declares direct APK distribution. Google requires apps installed on
+certified Android devices to come from verified developers, also outside Google Play, and rolls
+this out country by country. Before each direct-APK release, check the current status on
+Google's Android developer site, and complete the developer verification and package / signing
+key registration it asks for. Without it, users in the affected countries may not be able to
+install the APK.
 
 ### 2.6 Store listing assets
 
@@ -180,6 +214,7 @@ Applies when the App Store is a declared channel for iOS. Build commands: `relea
 | App Store Connect record *(one-time)* | App name (≤ 30 characters, unique on the store), primary language, bundle id, SKU. |
 | Version | `CFBundleShortVersionString` = pubspec `X.Y.Z`; `CFBundleVersion` = build number `N`, higher than every previous upload of that version. Flutter sets both from `pubspec.yaml`. |
 | Capabilities | Only those the app uses (Push, iCloud, Sign in with Apple, …), enabled on the App ID **and** in Xcode Signing & Capabilities. |
+| EU trader status *(one-time)* | If the app is distributed in the European Union, the trader / non-trader declaration (Digital Services Act) is completed in App Store Connect. Check the current wording. |
 
 ### 3.2 Build and toolchain
 
@@ -190,8 +225,8 @@ Applies when the App Store is a declared channel for iOS. Build commands: `relea
   (automatic signing in Xcode is fine). Certificates and profiles never enter git.
 - Build: `flutter build ipa --release --obfuscate --split-debug-info=build/symbols/ios-prod-<version>/`
   (add `--flavor prod` when flavors are used). The `.ipa` is in `build/ios/ipa/`.
-- Upload with Xcode Organizer or Apple's Transporter app. Wait for processing to finish before
-  submitting.
+- Upload the `.ipa` with Apple's Transporter app, or open `build/ios/archive/Runner.xcarchive`
+  in Xcode Organizer and use Distribute App. Wait for processing to finish before submitting.
 - **Device family**: if `TARGETED_DEVICE_FAMILY` includes iPad, every screen MUST work on iPad in
   all orientations the app allows, and iPad screenshots are required. If the app is not designed
   for iPad, set the target to iPhone only.
@@ -205,7 +240,9 @@ Applies when the App Store is a declared channel for iOS. Build commands: `relea
   language.
 - **Privacy manifest** — `ios/Runner/PrivacyInfo.xcprivacy` declares the data the app collects and
   the "required reason" APIs it uses (for example `UserDefaults`, used by `shared_preferences`, and
-  file timestamps). Plugins and SDKs MUST ship their own manifests; use versions that do.
+  file timestamps). Add the file to the Runner target in Xcode (Target Membership); a file that
+  is only in the folder is not bundled. Plugins and SDKs MUST ship their own manifests; use
+  versions that do.
 - **App Privacy** answers in App Store Connect match the privacy manifest and the real behavior.
 - **Export compliance**: set `ITSAppUsesNonExemptEncryption` in `Info.plist` (`false` when the app
   uses only exempt encryption such as standard HTTPS and OS-provided crypto). If it uses its own
@@ -274,7 +311,7 @@ declared channels. Build commands: `release_process.md` §11.
 | Reserved app name *(one-time)* | Reserve the name in Partner Center. |
 | Product identity *(one-time)* | Copy **Package/Identity/Name**, **Package/Identity/Publisher** and **Package/Properties/PublisherDisplayName** exactly into `identity_name`, `publisher` and `publisher_display_name`. |
 | Signing | Set `store: true`. The Store signs the package — do not sign it yourself. |
-| Version | Store packages need the last (revision) part of `msix_version` to be `0`, e.g. `1.2.3.0`. |
+| Version | Store packages need the last (revision) part of `msix_version` to be `0`, e.g. `1.2.3.0` for `pubspec.yaml` `1.2.3+N`. So each Store release raises `X.Y.Z`; a new build number alone is not enough (engineering standard §5.5.1). |
 | Architectures | x64 at minimum; add arm64 for Windows on Arm devices as a separate package in the same submission (the `msix` package builds one architecture per package; Flutter builds arm64 only on an arm64 machine). |
 | Privacy policy URL | Required when the app accesses the internet or personal data — which is almost every app. |
 | Age rating | IARC questionnaire completed. |
@@ -348,8 +385,9 @@ be signed, notarized and stapled.
 
    ```bash
    # Sign (Xcode export does this for you and is the safer path). Apple advises against
-   # --deep for signing; if you sign by hand, sign nested frameworks first, then the app.
-   codesign --force --deep --options runtime --timestamp \
+   # --deep for signing: if you sign by hand, sign each nested framework in
+   # Contents/Frameworks/ first with the same options, then the app as below.
+   codesign --force --options runtime --timestamp \
      --sign "Developer ID Application: <Team Name> (<TEAMID>)" "build/macos/Build/Products/Release/<App>.app"
 
    # Notarize. Credentials are stored once in the keychain with
@@ -460,5 +498,5 @@ the declared channels. Build commands: `release_process.md` §11B.
 
 For each release and each declared channel, record in the release evidence
 (`release_process.md` §14): the gate checklist result, the build number uploaded, the store
-submission or rollout record, and any rule that changed since the last release (update this file
-when it did).
+submission or rollout record, and any rule that changed since the last release (when one did,
+tell the user so they can update this file in the guidelines repository).

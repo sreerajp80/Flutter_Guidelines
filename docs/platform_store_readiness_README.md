@@ -34,8 +34,9 @@ production release.
 
 **3. Re-check the store's own rules.** Stores change their rules every year (target SDK levels,
 required Xcode version, screenshot sizes). The numbers in the file were last checked on the date
-shown at the top. If a store's current documentation says something different, the store wins —
-update the file.
+shown at the top. If a store's current documentation says something different, the store wins.
+An app project never edits this file: tell the user, so they can update it in the guidelines
+repository (`DOCS_FOLDER_GUIDELINE.md` §1.1).
 
 ---
 

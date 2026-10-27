@@ -70,7 +70,9 @@ If the repository is a Flutter package or plugin:
 4. Enforce standards through tooling where practical.
 5. One repository SHOULD have one clear way to do state, navigation, theming, errors, and testing.
 6. Optimize for current complexity, not hypothetical future complexity.
-7. Security and logging policy are product requirements, not cleanup work.
+7. Every app is secure by default. Security and logging policy are product requirements, not
+   cleanup work: never traded away for convenience, and designed so they do not burden the user
+   or the app (section 15).
 8. Performance is a feature; it is designed in, not bolted on.
 9. Accessibility is a correctness requirement, not a nice-to-have.
 
@@ -187,7 +189,9 @@ Create the platform folders with the Flutter tool, never by hand, and only for d
 
 ```bash
 # New app — org is your reverse-DNS prefix; list only the declared platforms.
-flutter create --org com.example --platforms=android,ios,windows,macos,linux my_app
+# Run it in the project root (the folder that holds docs/guidelines/).
+# The final "." means "this folder"; without it Flutter makes a new subfolder.
+flutter create --org com.example --project-name my_app --platforms=<declared platforms> .
 
 # Add a platform to an existing app later.
 flutter create --platforms=macos .
@@ -319,11 +323,11 @@ enum AppFlavor { dev, prod }
 class AppFlavorConfig {
   AppFlavorConfig._(this.flavor);
 
-  // Explicit value passed by desktop builds via --dart-define=APP_FLAVOR=<value>.
-  // Empty when not provided.
+  // Passed with --dart-define=APP_FLAVOR=<value> on a platform without --flavor
+  // support (see "Which Way To Pass The Flavor"). Empty when not provided.
   static const _appFlavorValue = String.fromEnvironment('APP_FLAVOR');
 
-  // Auto-injected by Flutter on Android/iOS when --flavor is passed.
+  // Injected by the Flutter tool on any platform whenever --flavor is passed.
   // Falls back to 'prod' so an unflavored debug build still has a deterministic value.
   static const _frameworkFlavorValue = String.fromEnvironment(
     'FLUTTER_APP_FLAVOR',
@@ -350,7 +354,9 @@ class AppFlavorConfig {
   bool get isDev => flavor == AppFlavor.dev;
   bool get isProd => flavor == AppFlavor.prod;
 
-  String get appName => isDev ? 'MyApp Dev' : 'MyApp';
+  /// Added to the localized app name (`appName` in app_config.json,
+  /// guideline.md §1.8). Never hard-code the app name itself here.
+  String get nameSuffix => isDev ? ' Dev' : '';
   bool get showEnvironmentBanner => isDev;
   bool get enableVerboseLogging => isDev;
 }
@@ -489,7 +495,8 @@ Do the upgrade as its own change, with no feature work mixed in:
    fresh `flutter create` writes, and raise them if the new release raised the minimum.
 5. Run `flutter analyze`, the full test suite, and a release build of every flavor on every
    declared platform. Update the pinned versions in `CLAUDE.md` / `AGENTS.md` and the CI
-   setup, and record the upgrade in `CHANGELOG.md`.
+   setup, and record the upgrade in the change log (`change_log/`), and in `CHANGELOG.md` if
+   the project keeps one.
 
 **Known migrations — apply each one when its trigger applies to the project:**
 
@@ -602,11 +609,14 @@ factory on Windows and Linux; macOS uses the normal plugin):
 ```dart
 // In main() before runApp, for Windows and Linux desktop:
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/widgets.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (Platform.isWindows || Platform.isLinux) {
+  // Check kIsWeb first: Platform.* throws on Web.
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
@@ -627,21 +637,31 @@ want an initial size and a centred window, use `WindowOptions` with
 ```dart
 // In main() after WidgetsFlutterBinding.ensureInitialized() and before runApp.
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // ... logging, error handlers, storage, database (section 4.5) ...
+  final config = await ConfigService().loadAndVerify();
+  final lang = savedOrSystemLanguageCode(); // the resolved app language (8.4)
 
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+  if (!kIsWeb &&
+      (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
     await windowManager.setMinimumSize(const Size(800, 600));
-    await windowManager.setTitle('MyApp');
+    // The title is the localized app name (guideline.md §1.8), never a literal.
+    await windowManager.setTitle(
+      config.appName.resolve(lang) + AppFlavorConfig.instance.nameSuffix,
+    );
   }
 
   runApp(const MyApp());
 }
 ```
+
+When the user changes the language (8.4), set the window title again from the new language.
 
 **Keyboard shortcuts** — register app-wide shortcuts using `Shortcuts` and `Actions` widgets at
 the root. Use the platform's modifier key (Cmd on macOS, Ctrl on Windows and Linux). Document all
@@ -670,7 +690,7 @@ msix_config:
   publisher_display_name: <Publisher display name>
   identity_name: <from Partner Center, or your reverse-DNS id for sideloading>
   publisher: <CN=... from Partner Center, or from your code-signing certificate>
-  msix_version: 1.0.0.0          # four parts; keep in step with pubspec.yaml
+  msix_version: 1.0.0.0          # four parts; see "MSIX version" below
   logo_path: assets/icons/app_icon.png
   capabilities: internetClient   # least privilege — list only what the app uses
   languages: en-us               # one entry per declared language
@@ -697,6 +717,10 @@ dart run msix:create
 >
 > `release_process.md` §11 uses the first way.
 
+- **MSIX version**: map `pubspec.yaml` `X.Y.Z+N` to `msix_version: X.Y.Z.0`. The Microsoft
+  Store needs the last (revision) part to be `0`, so every Store release MUST raise `X.Y.Z` —
+  a change of the build number `+N` alone cannot be uploaded. A direct-download MSIX MAY use
+  `X.Y.Z.N` when `N` is 65535 or less. Check the current Partner Center rule before each release.
 - **Architecture**: one MSIX per architecture (`architecture: x64` or `arm64`). Flutter builds
   Windows arm64 only on an arm64 Windows machine. Ship arm64 only if it is built and tested
   there.
@@ -825,7 +849,8 @@ This section applies to user-facing applications. It is advisory for infrastruct
 - Centralize colors, typography, spacing, radius, and motion values.
 - Prefer semantic names over raw literals in widgets.
 - If the product supports both light and dark themes, both MUST be tested.
-- Design token constants SHOULD live in a single reviewed file such as `lib/app/theme/tokens.dart`.
+- Design token constants SHOULD live in a single reviewed file such as `lib/theme/tokens.dart`
+  (Tier 1) or `lib/app/theme/tokens.dart` (Tier 2).
 - Never hardcode `Color(0xFF...)` literals inside widget `build` methods; always reference a token.
 
 #### Material 3 Is The Default
@@ -844,8 +869,8 @@ the maintained code. A project on a Flutter version that has no `material_ui` pa
 SDK imports until it upgrades (5.3, "Known migrations").
 
 - Every app MUST depend on `material_ui` (and `cupertino_ui` if it uses any Cupertino
-  widget or the Cupertino localization delegate), with a caret (`^`) constraint on the current
-  version from pub.dev:
+  widget, or installs the fallback localization delegates of 8.3.1), with a caret (`^`)
+  constraint on the current version from pub.dev:
 
   ```yaml
   dependencies:
@@ -1105,14 +1130,17 @@ shipping. "We checked" is not sufficient — the method used should be recorded 
 checklist.
 
 **Touch target verification:**
-Enable `debugPaintSizeEnabled = true` in a debug build and visually confirm interactive elements
-meet the 48 × 48 dp minimum on mobile. Alternatively, enable Flutter DevTools → Widget Details
+Enable `debugPaintPointersEnabled = true` in a debug build, tap the interactive elements, and
+confirm their hit areas meet the 48 × 48 dp minimum on mobile (`debugPaintSizeEnabled` shows
+layout bounds, not hit areas). Alternatively, enable Flutter DevTools → Widget Details
 and inspect `Size` values for interactive widgets.
 
 **Contrast verification:**
-Use the [Material Design Color System contrast tool](https://m3.material.io/styles/color/system/how-the-system-works),
-the [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/), or a verified
-pub package such as `color_contrast_checker` to verify foreground/background pairs. Both light
+Use a contrast checker such as the
+[WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/), or compute the ratio in
+a test, to verify foreground/background pairs. (Material's
+[color system overview](https://m3.material.io/styles/color/system/how-the-system-works) is
+background reading on how its color roles are built; it is not a checker.) Both light
 and dark themes must be checked independently. Record the checked pairs and their ratios.
 
 **Semantics verification:**
@@ -1166,16 +1194,16 @@ Rules:
 ```dart
 IconButton(
   icon: const Icon(Icons.delete_outline),
-  tooltip: AppLocalizations.of(context).actionDelete, // short, localized
+  tooltip: AppLocalizations.of(context).tooltipDelete, // short, localized
   onPressed: _delete,
 )
 
 // Custom icon-only control: tooltip + explicit semantics.
 Tooltip(
-  message: l10n.actionShare,
+  message: l10n.tooltipShare,
   child: Semantics(
     button: true,
-    label: l10n.actionShare,
+    label: l10n.tooltipShare,
     child: InkWell(onTap: _share, child: const Icon(Icons.share)),
   ),
 )
@@ -1277,7 +1305,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   material_ui: ^<current>   # Material widgets and GlobalMaterialLocalizations (6.1)
-  cupertino_ui: ^<current>  # Cupertino widgets and GlobalCupertinoLocalizations
+  cupertino_ui: ^<current>  # only if Cupertino widgets are used or 8.3.1 fallback delegates exist
   intl: ^<current>          # take each <current> from pub.dev; never type a version from memory
 ```
 
@@ -1369,10 +1397,15 @@ Required for every app:
 
 | Allowed as a literal | Example |
 |---|---|
-| Log and debug messages | `AppLogger.d('cache miss for $id')` |
+| Log and debug messages | `AppLogger.debug('cache miss for $id')` |
 | Exception messages not shown in the UI | `throw StateError('db not initialized')` |
 | Technical identifiers | asset paths, route names, map/JSON keys, `Semantics` test tags |
 | Developer-only screens | a debug menu that never ships to users |
+
+**One second source of user-visible text.** The About-screen values (`appName`, `description`
+and the `details` rows) come from the locale maps in `assets/config/app_config.json`
+(`guideline.md` §1), not from ARB. They still carry every declared language (8.7), and their
+row labels still come from ARB (`aboutDetail<Key>`). No other screen text may live outside ARB.
 
 Anything a real user reads — screen titles, buttons, labels, hints, error text shown on screen,
 empty states, snackbars, dialogs, notification text — goes in the ARB file.
@@ -1392,8 +1425,8 @@ Example ARB file:
 ```json
 {
   "@@locale": "en",
-  "appTitle": "My App",
-  "@appTitle": { "description": "The application title" },
+  "titleHome": "Home",
+  "@titleHome": { "description": "Home screen app-bar title. Keep to one or two words." },
   "welcomeMessage": "Welcome, {name}",
   "@welcomeMessage": {
     "description": "Greeting shown on the home screen",
@@ -1410,7 +1443,7 @@ Generate typed accessors:
 flutter gen-l10n
 ```
 
-Use in code via `AppLocalizations.of(context).appTitle` (no `!`, because `l10n.yaml` sets
+Use in code via `AppLocalizations.of(context).titleHome` (no `!`, because `l10n.yaml` sets
 `nullable-getter: false`). Never use raw string literals for user-visible text.
 
 **Adding a language later.** Because the strings are already externalized, this is a small,
@@ -1454,6 +1487,8 @@ choose.
 
 ```dart
 // lib/l10n/fallback_localizations.dart
+// Keep the Cupertino fallback too: Material widgets on iOS / macOS can also read
+// CupertinoLocalizations (for example the adaptive text-selection menu).
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
 // Material and Cupertino delegates come from material_ui / cupertino_ui.
@@ -1544,11 +1579,18 @@ language:
 ```dart
 /// Locale to hand to `intl`. Languages with no CLDR data are formatted with
 /// the template language's patterns while the UI text stays translated.
-String formattingLocale(Locale locale) =>
-    DateFormat.localeExists(locale.toLanguageTag())
-        ? locale.toLanguageTag()
-        : 'en'; // the template language
+String formattingLocale(Locale locale) {
+  // intl keys use underscores ('en_US'), not language tags ('en-US').
+  final full = Intl.canonicalizedLocale(locale.toString());
+  if (DateFormat.localeExists(full)) return full;
+  if (DateFormat.localeExists(locale.languageCode)) return locale.languageCode;
+  return 'en'; // the template language
+}
 ```
+
+`DateFormat.localeExists` only knows the locales whose date symbols are loaded. The Material
+localization delegate loads them for the locales it supports; call `initializeDateFormatting()`
+(`package:intl/date_symbol_data_local.dart`) at startup if you format dates before that.
 
 Use `formattingLocale(...)` everywhere 8.9 calls for a locale argument.
 
@@ -1696,7 +1738,8 @@ error explanations, confirmation dialog bodies, notification bodies, tutorial co
 row labels (`aboutDetail<Key>`) are also exempt from this budget so they can wrap to two lines.
 
 **ARB key naming makes the category checkable.** Prefix every key so the budget can be enforced
-mechanically:
+mechanically. The only exceptions are the fixed keys named in `guideline.md` (`madeWithLove`,
+`madeWithLoveA11y`, and the `aboutDetail<Key>` labels):
 
 | Prefix | Category | Budget |
 |---|---|---|
@@ -1776,14 +1819,27 @@ void main() {
       expect(problems, isEmpty, reason: problems.join('\n'));
     });
 
-    test('the optional About badge keeps its {heart} marker in every language', () {
+    test('the optional About badge is complete in every language', () {
+      // The badge is on when the template ARB has `madeWithLove` (guideline.md §1.7).
+      if (!_strings('lib/l10n/app_$template.arb').containsKey('madeWithLove')) return;
+      final heartEmoji = RegExp('\u2764|\u2665|\u{1F496}|\u{1F497}|\u{1F49C}');
+      final problems = <String>[];
       for (final locale in [template, ...locales]) {
-        final text = _strings('lib/l10n/app_$locale.arb')['madeWithLove'];
-        if (text != null) {
-          expect(text.contains('{heart}'), isTrue,
-              reason: 'app_$locale.arb madeWithLove is missing the {heart} marker');
+        final strings = _strings('lib/l10n/app_$locale.arb');
+        final text = strings['madeWithLove'];
+        final a11y = strings['madeWithLoveA11y'];
+        if (text == null) problems.add('app_$locale.arb: madeWithLove is missing');
+        if (a11y == null) problems.add('app_$locale.arb: madeWithLoveA11y is missing');
+        if (text != null && '{heart}'.allMatches(text).length != 1) {
+          problems.add('app_$locale.arb: madeWithLove must contain exactly one {heart}');
+        }
+        for (final entry in {'madeWithLove': text, 'madeWithLoveA11y': a11y}.entries) {
+          if (entry.value != null && heartEmoji.hasMatch(entry.value!)) {
+            problems.add('app_$locale.arb: ${entry.key} has a heart emoji; use {heart}');
+          }
         }
       }
+      expect(problems, isEmpty, reason: problems.join('\n'));
     });
   });
 
@@ -1810,10 +1866,19 @@ void main() {
       checkLanguages('appName', json['appName']);
       checkLanguages('description', json['description']);
 
+      // Rows that hold technical values (never translated) may be plain strings.
+      // Every other row is display text and needs a locale map (guideline.md §1.2).
+      const technicalKeys = {'email', 'website', 'privacyPolicy'};
+
       final details = json['details'];
       if (details is Map<String, dynamic>) {
         for (final entry in details.entries) {
           final id = entry.key;
+          if (locales.isNotEmpty &&
+              entry.value is String &&
+              !technicalKeys.contains(id)) {
+            problems.add('details.$id is a plain string; use a locale map');
+          }
           checkLanguages('details.$id', entry.value);
 
           // Details key is lowerCamelCase; label in ARB is aboutDetail<Key>
@@ -2071,8 +2136,8 @@ profile in debug mode.
 - Use `const` constructors inside list item widgets wherever possible.
 - Avoid loading all data into memory for very long lists. Implement pagination or cursor-based
   loading at the repository layer.
-- `ListView.separated` is acceptable for short lists with separators but use
-  `ListView.builder` with conditional separator rendering for long lists.
+- `ListView.separated` builds its items and separators lazily, like `ListView.builder`, so it
+  is fine for long lists too.
 
 ### 10.4 Image Handling And Memory
 
@@ -2351,7 +2416,7 @@ The repository MUST declare one of the following policies for generated files an
 
 **Option B: Exclude generated files** (acceptable for packages or large codebases)
 
-- `*.freezed.dart` and `*.g.dart` are added to `.gitignore`.
+- `*.freezed.dart`, `*.g.dart` and `*.gr.dart` are added to `.gitignore`.
 - CI MUST run `dart run build_runner build --delete-conflicting-outputs` before `flutter analyze`
   and `flutter test`.
 
@@ -2545,6 +2610,7 @@ dependencies:
 ```dart
 // lib/core/logging/app_logger.dart
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:logger/logger.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -2559,7 +2625,9 @@ class AppLogger {
 
   /// Call once at startup (section 4.5, step 2). It is async because
   /// `getApplicationCacheDirectory()` is async; it swaps in the full logger.
+  /// On Web there is no log file (no `dart:io` files): it keeps the console logger.
   static Future<void> init() async {
+    if (kIsWeb) return;
     final cacheDir = await getApplicationCacheDirectory();
     final logFile = File(p.join(cacheDir.path, 'app.log'));
 
@@ -2638,15 +2706,121 @@ file before opening a new one. Document whichever approach is chosen in `docs/ar
 
 ## 15. Security Standard
 
-### 15.1 Core Security Rules
+Every app MUST be secure. The Security Baseline in 15.1 is a `MUST` for **every** app, in every
+profile, including small internal tools. The other profiles only **add** controls; they never
+remove a baseline one. If you are not sure whether some data is sensitive, treat it as sensitive.
 
-These rules apply to all Flutter apps.
+Security must also stay easy to live with. Controls are matched to the risk, use platform
+features where they exist, and must not slow the app or add steps for the user without a clear
+reason (15.6).
+
+### 15.1 Security Baseline (Every App)
+
+These rules apply to all Flutter apps. Record how the app meets them in `docs/security.md` §1.1.
+
+**Logging and permissions**
 
 - Never log secrets, tokens, private payloads, or decrypted sensitive data.
 - Request only the permissions the app actually uses.
 - Ask for permissions at point of use where the platform allows it.
 - Production logs SHOULD avoid personal data unless operationally necessary.
-- Production builds MUST be compiled with `--obfuscate --split-debug-info=<symbols_path>`.
+
+**Secrets in the app**
+
+- Anything shipped inside the app — Dart code, assets, `--dart-define` values, `.env` files,
+  native config files — can be read by anyone who has the app. Treat it as **public**.
+- Real secrets (server or admin keys, signing keys, private API keys) MUST NOT ship in the app.
+  They stay on a server the project controls.
+- Keys that must ship in the app (for example a maps or Firebase key) MUST be restricted on the
+  provider's side: by app id / signing certificate, by API scope, and by quota.
+
+**Network**
+
+- HTTPS (TLS) only. No cleartext HTTP in release builds on any platform.
+- Never disable certificate checks: no `badCertificateCallback` that returns `true`, no global
+  `HttpOverrides` that trusts every certificate, no "allow insecure" switch in release code.
+- Keep the platform defaults on: Android cleartext traffic off (`release_process.md` §6.5), iOS
+  and macOS App Transport Security on with no `NSAllowsArbitraryLoads`.
+- Set connect and receive timeouts on network clients.
+- Certificate pinning is **not** the default. Use it only when the project controls certificate
+  rotation and ships a backup pin, and record the decision in `docs/security.md` §5. A wrong pin
+  locks every user out of the app.
+
+**Tokens, credentials and sign-in**
+
+- Every sign-in token, session cookie, refresh token, or user credential MUST be kept in
+  platform secure storage (for example `flutter_secure_storage`), even when the Sensitive Data
+  Extension does not apply. Never in `SharedPreferences` or a plain file.
+- Never store a user's password. Sign-out removes all tokens from the device.
+- If the app has user accounts, sign in with OAuth 2.0 / OpenID Connect using PKCE through the
+  system browser, or the platform's own sign-in sheet or passkeys. Never build a login form
+  inside an embedded WebView for a third-party identity provider.
+- Access to server data is enforced **on the server**. The app never relies on its own checks
+  (hidden buttons, client-side role flags, decoded tokens) to protect server data.
+
+**Input from outside the app**
+
+- Treat everything that comes from outside as untrusted and validate it before use: deep links
+  and app links, Android intents, push notification payloads, files the user imports, clipboard
+  content, QR codes, platform-channel arguments, and server responses.
+- Imported files: check size and type before parsing. When extracting archives or building file
+  paths from input, block `..` and absolute paths so nothing is written outside the target
+  folder ("zip slip").
+- Use parameterized SQL queries only; never build SQL by joining strings with input.
+- A deep link MUST NOT perform a sensitive action (delete, pay, change account, share data) by
+  itself. Open the screen and let the user confirm.
+- Sign-in and other callback links use verified links (Android App Links, iOS / macOS Universal
+  Links) where the platform supports them, not a custom URL scheme alone.
+
+**WebView**
+
+- Avoid WebViews when a native screen or the system browser can do the job.
+- If a WebView is used: load only an allowlist of HTTPS origins, turn on JavaScript only when
+  the page needs it, expose no JavaScript bridge (channel) to content the project does not
+  control, and open every other link in the system browser.
+
+**Platform hardening**
+
+- Android: `android:exported="false"` on every component that does not need to be reached from
+  outside; exported components validate their input (`release_process.md` §6.7).
+  `PendingIntent` uses `FLAG_IMMUTABLE` unless the feature needs a mutable one. `FileProvider`
+  paths are as narrow as possible. No world-readable or world-writable files.
+- App data lives in the app's private folders (for example `getApplicationSupportDirectory()`),
+  never in shared or public storage unless the user chose that location.
+- Desktop platforms follow the controls in `docs/security.md` §10 (sandbox, hardened runtime,
+  confinement, signing).
+
+**Randomness and cryptography**
+
+- Use `Random.secure()` for anything security-related (ids that must not be guessed, nonces,
+  keys). Never `Random()`.
+- Never invent your own cryptography. Use well-known, maintained libraries and standard
+  algorithms.
+
+**Release builds**
+
+- No debug menus, test accounts, backdoors, or "skip login" switches in production builds.
+  Developer tools exist only in non-production flavors (section 5).
+- `android:debuggable` is `false` in release (`docs/security.md` §8.3).
+
+**Third-party SDKs and privacy**
+
+- Review every analytics, ads, crash-reporting, or other SDK for what data it collects and where
+  it sends it. List each one in `docs/security.md` §4.
+- Crash reports and analytics never carry secrets or personal data.
+- Collect and keep only the data a feature needs (data minimization).
+
+**Web (if declared)**
+
+- No secrets in the web bundle; everything in it is public.
+- Set a Content Security Policy where the hosting allows it.
+
+**Binary protection**
+
+- Production builds for every declared **native** platform (Android, iOS, Windows, macOS,
+  Linux) MUST be compiled with `--obfuscate --split-debug-info=<symbols_path>`. Web builds do
+  not produce the same symbol files: use the hardening options that `flutter build web -h` lists
+  for your Flutter (`release_process.md` §11C).
   Obfuscation renames Dart class and method names in the compiled binary to meaningless
   identifiers. This raises the cost of casual inspection and automated analysis of the release
   binary — an attacker without a decompiler cannot read class or method names directly from the
@@ -2665,34 +2839,47 @@ financial data, recovery codes, or local encrypted stores.
 - Never hardcode keys, IVs, salts, recovery passwords, or backup passwords.
 - Cryptographic formats SHOULD be versioned so migrations remain possible.
 - Clipboard use for secrets SHOULD be time-bounded or explicitly communicated.
-- Screenshot and screen-recording protection MUST be enabled:
-  - Android: set `WindowManager.LayoutParams.FLAG_SECURE` on the window — in `MainActivity`,
-    through a method channel, or with a maintained plugin. (The old `flutter_windowmanager`
-    plugin is no longer maintained; do not add it.)
-  - iOS: Overlay an opaque view on the appropriate "will resign active" hook —
-    `sceneWillResignActive(_:)` for apps on the UIScene lifecycle (5.4), or
-    `applicationWillResignActive` for apps not yet migrated.
+- Screen-capture protection MUST be enabled on every screen that shows sensitive data (record
+  the screens in `docs/security.md` §10). What each platform allows differs:
+  - Android (block): set `WindowManager.LayoutParams.FLAG_SECURE` on the window — in
+    `MainActivity`, through a method channel, or with a maintained plugin. This blocks
+    screenshots and screen recording. (The old `flutter_windowmanager` plugin is no longer
+    maintained; do not add it.)
+  - iOS (hide and detect): iOS does not let an app block screenshots. Instead:
+    - overlay an opaque view on the "will resign active" hook so the app-switcher snapshot
+      shows no data — `sceneWillResignActive(_:)` for apps on the UIScene lifecycle (5.4), or
+      `applicationWillResignActive` for apps not yet migrated;
+    - hide sensitive content while the screen is being recorded or mirrored. Read the capture
+      state from `UITraitCollection.sceneCaptureState` on UIScene apps and react to its change
+      (`UIScreen.isCaptured` and its change notification in older code). Detection is
+      best-effort, not a guarantee;
+    - the app MAY react to `UIApplication.userDidTakeScreenshotNotification` (for example a
+      short warning), but cannot stop the screenshot.
 - App lock, background lock, and session-expiry behavior MUST be explicit in app state.
 - Export of sensitive data SHOULD be encrypted by default; plaintext export, if allowed, MUST be
   explicit and user-confirmed.
 - Backup, recovery, import, and migration flows MUST be tested as critical flows.
+- Keep these controls easy and fast to use — biometric unlock with fallback, a short lock grace
+  period, key derivation off the main isolate — as described in 15.6.
 
 ### 15.3 OWASP Mobile Top 10 Compliance Checklist
 
-Under the `Sensitive Data Extension` this checklist is a MUST: sign it off in `docs/security.md`
-§12 before every production release. Other production apps SHOULD complete it and may mark items
-`n/a`. Verify the following controls:
+This checklist is a MUST under the `Sensitive Data Extension` **and** the
+`Production App Extension`: sign it off in `docs/security.md` §12 before every production
+release. Items that do not apply to the app are marked `n/a`, so a small app is not burdened.
+For deeper detail on any item, use the OWASP Mobile Application Security Verification Standard
+(MASVS). Verify the following controls:
 
 | ID | Risk | Control |
 |----|------|---------|
-| M1 | Improper Credential Usage | No hardcoded secrets; use secure storage |
+| M1 | Improper Credential Usage | No secrets shipped in the app (code, assets, `--dart-define`); shipped keys restricted by the provider; tokens in secure storage |
 | M2 | Inadequate Supply Chain Security | Dependency audit; pin versions in `pubspec.lock` |
-| M3 | Insecure Authentication | App lock with proper background/foreground enforcement |
-| M4 | Insufficient Input/Output Validation | Validate all user input; sanitize before DB write |
-| M5 | Insecure Communication | TLS only for any network traffic; no HTTP |
+| M3 | Insecure Authentication/Authorization | Server-side authorization; OAuth/OIDC with PKCE via the system browser if the app signs in; app lock with proper background/foreground enforcement where used |
+| M4 | Insufficient Input/Output Validation | All outside input validated (deep links, intents, imports, payloads); parameterized SQL; no path traversal |
+| M5 | Insecure Communication | TLS only for any network traffic; no HTTP; certificate checks never disabled |
 | M6 | Inadequate Privacy Controls | Data inventory reviewed; no PII in logs |
 | M7 | Insufficient Binary Protections | `--obfuscate` applied to release builds |
-| M8 | Security Misconfiguration | `android:debuggable=false` verified; permissions minimal |
+| M8 | Security Misconfiguration | `android:debuggable=false` verified; no accidental exported components; permissions minimal; no debug backdoors |
 | M9 | Insecure Data Storage | No sensitive data in `SharedPreferences` or unencrypted files |
 | M10 | Insufficient Cryptography | Versioned encrypted formats; secure key derivation |
 
@@ -2720,6 +2907,37 @@ Under `Sensitive Data Extension`:
   logging standard.
 - Verbose logging MUST be gated by environment or flavor config.
 - Error logs SHOULD contain operation and error context without exposing protected data.
+
+### 15.6 Security With Good Usability And Performance
+
+Strong security and an easy, fast app go together. These rules apply to every app.
+
+- **Match the control to the risk.** Controls follow the data sensitivity recorded in
+  `docs/security.md` §4. A low-risk app does not get high-friction controls such as a forced app
+  lock or a new sign-in on every resume.
+- **Prefer platform features.** They are usually both safer and easier: biometrics with a
+  device-credential (PIN / passcode) fallback, passkeys, the system photo and file pickers
+  (which need no broad storage permission), and platform secure storage.
+- **Permissions at the moment of need.** Ask with a short, localized reason. If the user says
+  no, the app keeps working in a reduced but safe way.
+- **App lock grace period.** When an app lock is used, lock after a short, documented grace
+  period in the background instead of on every quick app switch. The user may choose a stricter
+  setting. Record the period in `docs/security.md` §7.1.
+- **Rooted, jailbroken, or emulator devices.** By default warn the user or limit the most
+  sensitive features. Block the app only when the threat model in `docs/security.md` §3
+  justifies it.
+- **No slow-down.** Encryption, key derivation, hashing, and large-file crypto run off the main
+  isolate (`compute()` or `Isolate`, section 10.5). Tune the key-derivation cost so unlock stays
+  quick on the slowest target device; derive the key once per unlock and keep it in memory only
+  while unlocked. Initialize secure storage and crypto lazily so startup time is not hurt
+  (section 10.6).
+- **Clear messages.** Security messages are localized, plain, and say what the user can do next.
+  Lock screens and biometric fallbacks are accessible (section 7).
+- **Fail safe, but recoverable.** On a security error, deny the action and give the user a clear
+  way forward. Never fail open — for example, never skip the lock because biometrics could not
+  load.
+- **Record friction.** Every control that adds a step for the user is listed in
+  `docs/security.md` §7.1 with its reason.
 
 ---
 
@@ -2838,7 +3056,7 @@ Under `Production App Extension`:
 |-------------|-----------------|-----------|
 | Photographs, complex gradients | WebP (lossy) | 25–35% smaller than JPEG at equal quality |
 | Logos, UI illustrations with transparency | WebP (lossless) or SVG | Smaller than PNG; SVG preferred if vector |
-| Icons (monochrome or multi-color) | SVG via `flutter_svg` | Resolution-independent |
+| Icons (monochrome or multi-color) | Material / Cupertino icon fonts (`Icons.*`, 17.3); SVG via `flutter_svg` for custom icons | Resolution-independent |
 | Raster fallback (when SVG not viable) | PNG with 2x/3x variants | Only when SVG cannot achieve the result |
 
 Never use JPEG for UI assets that require transparency.
@@ -2952,6 +3170,9 @@ is a common store rejection.
 
 - **Android** MUST ship an adaptive icon (foreground + background layers) and SHOULD ship a
   monochrome layer for themed icons.
+- **Web** (if declared): generate the favicon and `web/icons/` with the same tool
+  (`web: { generate: true, image_path: ... }` in `flutter_launcher_icons`, check current options)
+  and set the app name and theme colour in `web/manifest.json`.
 - **Linux** icons are installed by the package (Snap / Flatpak / `.deb`) under the
   `APPLICATION_ID` name (5.5.3); the tool above does not cover Linux.
 - **Splash screen**: use the native launch screen (Android 12+ `SplashScreen` API, iOS
@@ -2983,8 +3204,9 @@ is a common store rejection.
 - Bug fixes SHOULD add regression tests when feasible.
 - Run `flutter test` after code changes that affect Dart behavior.
 - Shared test scaffolding SHOULD live in `test/helpers/` or an equally obvious location.
-- Database migration tests MUST cover the full upgrade path from version 1 to the current version,
-  not just the latest increment.
+- Database migration tests MUST cover the full upgrade path from the oldest schema version still
+  installed by users (usually version 1) to the current version, not just the latest increment
+  (13.1).
 
 ### 18.3 Test Quality
 
@@ -3078,8 +3300,11 @@ runs in CI (19.3).
 
 ### 19.1 Required CI Checks
 
-Every repository MUST have a CI workflow that runs on pull requests and on pushes to the
-protected main branch. It MUST be in place before the first merge to the main branch.
+Every repository hosted on GitHub MUST have a CI workflow that runs on pull requests and on
+pushes to the protected main branch. It MUST be in place before the first merge to the main
+branch. A repository on another git host runs the same checks in that host's CI, or locally
+before every merge; the same "checks only" rules (19.2, 19.3) apply. Record which one the project
+uses in `docs/PROJECT_PROFILE.md` §7.
 
 Allowed steps — only these:
 
@@ -3092,7 +3317,8 @@ Allowed steps — only these:
 - `flutter test` — this includes the localization parity test (§8) and any other unit, widget,
   or golden test.
 - Other read-only check scripts that only pass or fail, such as the generated-file staleness
-  check (Option A in §12.2) or a language-pack check (`language_packs/`).
+  check (Option A in §12.2) or a language-pack check (`language_packs/`). A secret-scanning
+  check that only passes or fails and uses no secrets MAY be added here too.
 
 Rules:
 
@@ -3232,6 +3458,10 @@ build/
 *.mobileprovision
 *.provisionprofile
 
+# Local secrets and environment files — never ship or commit them
+.env
+.env.*
+
 # Machine-local state
 .dart_tool/
 .flutter-plugins
@@ -3264,7 +3494,7 @@ build/
 | `docs/security.md` | Threat model, data inventory, retention policy; full detail under `Sensitive Data Extension` |
 | `docs/release_process.md` | Release scope and runbook; full detail under `Production App Extension` |
 | The rest of the baseline `docs/` set | `workflow_rules.md`, `dependencies.md`, `project_structure.md`, `implementation_plan.md`, `implementation_progress.md` (`DOCS_FOLDER_GUIDELINE.md` §6) |
-| `PRIVACY.md` or hosted privacy policy | Required for any app on a public store (`platform_store_readiness.md`) |
+| Privacy policy (text + public URL) | Required for any app on a public store. Stores need a public **URL**; a file in the repo counts only if it is reachable at a public URL. A common setup is `PRIVACY.md` in a public repo, linked by its URL (`platform_store_readiness.md` §1, "Where to host it") |
 | `plans/` | One plan per change — MUST follow the privacy rule in 21.1.1 |
 | `change_log/` | One log per change — MUST follow the privacy rule in 21.1.1 |
 
@@ -3318,9 +3548,10 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Identify whether the repo is Tier 1 or Tier 2 and follow the existing structure.
 - Identify the existing state-management pattern and follow it.
 - Read `docs/PROJECT_PROFILE.md`: applicability profiles, target platforms, distribution
-  channels, declared languages, language packs, About options. If it is missing, create it from
-  `PROJECT_PROFILE_TEMPLATE.md` and ask the user to confirm the open choices before building
-  features. Never guess platforms, stores, languages, author or package id.
+  channels, declared languages, language packs, About options. If it is missing, run the intake
+  in `AI_AGENT_START_HERE.md` §3 and get the user's approval of the filled-in profile before
+  creating it from `PROJECT_PROFILE_TEMPLATE.md`. Never guess platforms, stores, languages,
+  author or package id.
 - Read every language pack that applies to a declared language.
 - Check the current database schema version before writing any migration.
 - Check whether the repository commits or excludes generated files before creating new models.
@@ -3333,6 +3564,12 @@ When this standard is supplied to an AI coding assistant, the assistant MUST:
 - Do not add boilerplate comments or type annotations to unchanged code.
 - Do not invent abstractions for one-time operations.
 - Apply the security profile in force; never log secrets or weaken cryptographic behavior.
+- Follow the Security Baseline (section 15.1) in every app. Never weaken a security control to
+  make something work — for example cleartext HTTP, trusting all certificates, loosening
+  `allowBackup` or `android:exported`, adding broad permissions, turning on debug flags, or
+  disabling a check. If a task seems to need it, stop and ask the user in the plan.
+- Give every plan that touches network, storage, sign-in, permissions, deep links, WebViews,
+  platform folders, or dependencies a short **"Security impact"** line.
 - Ensure all `plans/` and `change_log/` entries follow the privacy rule in 21.1.1: **relative repository paths only**, **no local system details** (OS user name, computer/host name, home or drive-letter paths, network shares, LAN/internal IPs, local server URLs with ports, device serial numbers, personal email addresses), and **no secrets** (API keys, tokens, passwords, keystore passphrases, credentials, PII).
 - Put all user-visible strings in `lib/l10n/*.arb` and read them through `AppLocalizations` (section 8.2) — never a raw string literal in a widget.
 - Add every new key to the ARB file of **every declared language**, with a real translation in each (sections 8.2, 8.7). Never leave the template-language value as a placeholder in another language's file.
@@ -3376,6 +3613,11 @@ A task is complete only when all applicable items are true.
 - `flutter test` passes for behavior-affecting code changes.
 - `dart format .` produces no required follow-up changes.
 - No secrets, build output, or local machine files were added to git.
+- The change follows the Security Baseline (section 15.1); no security control was weakened.
+- New network calls use HTTPS with normal certificate checks.
+- New input from outside the app (links, intents, files, payloads) is validated.
+- `docs/security.md` was updated if the change touched permissions, storage, network, sign-in,
+  third-party SDKs, or entry points.
 - All `plans/` and `change_log/` files use relative repository paths only and contain zero local system details and zero sensitive data — safe to publish on the internet (section 21.1.1).
 - `l10n.yaml` and one ARB file per declared language exist, and every user-visible string added or
   changed by this task comes from `AppLocalizations` (section 8.2).
@@ -3402,6 +3644,8 @@ A task is complete only when all applicable items are true.
 - No new jank frames introduced on the primary user flow (verified in profile mode if the change
   touched rendering, lists, or animations).
 - App size budget was checked if a new dependency was added.
+- OWASP checklist items affected by the change were re-verified (the checklist is a MUST under
+  this extension — 15.3).
 - The store readiness gate of every declared distribution channel (`platform_store_readiness.md`)
   still holds for any change touching manifests, `Info.plist`, entitlements, MSIX capabilities,
   Snap/Flatpak permissions, target SDKs, signing, data collection, or store-listed behavior.
@@ -3422,7 +3666,8 @@ A task is complete only when all applicable items are true.
 - Mirrored tests reduce search time and ownership confusion.
 - `utils/` is acceptable only when its scope stays clear and small.
 - Flavors solve real problems, but not every app needs them on day one.
-- Security requirements should be attached to product risk, not copied blindly.
+- The security baseline is for every app; extra controls are matched to product risk, not
+  copied blindly.
 - CI should enforce the boring rules so review can focus on behavior and design.
 - `const` is free performance; use it everywhere it compiles.
 - Performance regressions are easiest to catch immediately after the change that caused them.

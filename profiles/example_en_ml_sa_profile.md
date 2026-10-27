@@ -1,7 +1,7 @@
 # Example Project Profile — English / Malayalam / Sanskrit app with a signature badge
 
 > **This is a worked example, not a rule.** It shows a filled-in `docs/PROJECT_PROFILE.md` for an
-> app that ships English, Malayalam and Sanskrit, enables the "Made with ❤️ from India" signature
+> app that ships English, Malayalam and Sanskrit, enables the "Made with {heart} from India" signature
 > badge, and publishes to Google Play and the Microsoft Store. Copy
 > `PROJECT_PROFILE_TEMPLATE.md` for your own app; reuse parts of this file only if they match your
 > choices.
@@ -29,6 +29,7 @@
 | Analytics | none |
 | Crash reporting | none |
 | Ads | none |
+| Other third-party SDKs that send data | none |
 | In-app purchases or subscriptions | none |
 | Device permissions | File access — to open the PDF the user picks (system file picker, no broad storage permission) |
 
@@ -90,6 +91,17 @@ Build flavors: `dev + prod`.
 | Badge text — Malayalam | `സ്നേഹത്തോടെ {heart} ഇന്ത്യയിൽ നിന്ന്` |
 | Badge text — Sanskrit | `सस्नेहं निर्मितम् {heart} भारततः` |
 | Badge screen-reader text | `Made with love from India` / `സ്നേഹത്തോടെ ഇന്ത്യയിൽ നിന്ന്` / `सस्नेहं निर्मितम् भारततः` |
+
+What the badge texts mean, word for word (back-translations, as shown on screen):
+
+| Language | Back-translation | Pattern |
+|---|---|---|
+| English | "Made with ❤ from India" | The heart stands for the word "love". |
+| Malayalam | "With love ❤ from India" | The word for love (സ്നേഹത്തോടെ) is written out and the heart follows it as decoration. There is no word for "made"; this short form is the natural one in Malayalam. |
+| Sanskrit | "Made with love ❤ from India" | The word for love (सस्नेहं) is written out and the heart follows as decoration. |
+
+These differences are intended (`guideline.md` §1.7, "Translating the badge"). Do not change them
+to match the English pattern.
 
 Example `assets/config/app_config.json` for this profile:
 

@@ -10,7 +10,7 @@ It is a **living release playbook** for your Flutter app. Unlike `architecture.m
 - Mandatory release-build hardening — `--obfuscate`, `--split-debug-info`, R8/ProGuard rules, app size analysis (a separate throw-away build, run before the hardened build), and Android manifest/asset security verifications (`debuggable=false`, backup and device-transfer rules — sensitive data excluded for sensitive-data apps — cleartext traffic, asset audit) (Section 6)
 - Signing material handling and keystore backup policy (Section 7)
 - The full pre-release checklist split across Code & Quality, Performance, Security, Product & Documentation, and Artifact Validation (Section 8)
-- Step-by-step Android, iOS, Windows, macOS and Linux release procedures with exact build commands (Sections 9, 10, 11, 11A, 11B)
+- Step-by-step Android, iOS, Windows, macOS, Linux and Web release procedures with exact build commands (Sections 9, 10, 11, 11A, 11B, 11C)
 - The **store readiness gates** (Google Play, App Store, Microsoft Store, Mac App Store / Developer ID, Snap Store / Flathub) are not in this file; they live in `platform_store_readiness.md`. Each declared channel's gate is completed before the first upload and re-checked before every production release.
 - Distribution channels per platform (Section 12)
 - Rollback and hotfix process (Section 13)
@@ -73,7 +73,7 @@ When `release_process.md` is populated and placed in your project, an AI assista
 - Know the Section 8 checklist and walk through it item by item when you say "prepare release v1.2.3", rather than skipping ahead to the build command
 - Know the rollback policy and produce a hotfix branch with the correct naming pattern when an incident happens
 - Know that the full release checklist applies to hotfixes too — and not let "it's just a small fix" skip the obfuscation, symbol archival, or `android:debuggable=false` verification
-- Know the `git tag v<version>` step and produce the exact commands to tag and push at the end of the release
+- Know the `git tag v<X.Y.Z>` step (version without `+build`) and produce the exact commands to tag and push at the end of the release
 
 Without this document, the AI has to guess your release procedure — and the most common release incidents (lost symbols, debuggable production build shipped, R8-stripped class crashing in release, keystore committed to git) are exactly the cases the AI cannot recover from after the fact.
 
@@ -96,8 +96,9 @@ Rule N: Read docs/release_process.md before suggesting any release build command
   Build command rules:
   - Every prod release build MUST include --obfuscate and
     --split-debug-info=build/symbols/<platform>-<flavor>-<version>/.
-  - Every prod release build MUST be followed by a size-analysis step
-    and a symbol archive step.
+  - A size-analysis build is optional. If you run it, run it BEFORE the
+    hardened build — it writes into the same output folders.
+  - Every prod release build MUST be followed by a symbol archive step.
   - Never suggest a release command that omits these flags.
 
   Checklist rules:
@@ -122,7 +123,7 @@ Instead of:
 
 Say:
 
-> *"Following docs/release_process.md §9 Android Release Steps, give me the full prod release command including obfuscation, split-debug-info path templated to the current pubspec.yaml version, and the post-build size-analysis step."*
+> *"Following docs/release_process.md §9 Android Release Steps, give me the full prod release command including obfuscation, split-debug-info path templated to the current pubspec.yaml version, and the optional size-analysis step to run before it."*
 
 Instead of:
 

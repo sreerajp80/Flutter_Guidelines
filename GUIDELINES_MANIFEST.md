@@ -32,7 +32,9 @@ docs/guidelines/
 > **Templates vs. references.** Four files are **templates**: copy them into this app's `docs/`
 > folder and fill them in — `PROJECT_PROFILE_TEMPLATE.md` (as `PROJECT_PROFILE.md`),
 > `architecture.md`, `security.md`, `release_process.md`. For these, the **local copy wins**.
-> Every other file is a **reference**: never copy it; read it at the submodule path below.
+> This manifest is the one **pointer file**: it is copied into `docs/` unchanged and never
+> edited there. Every other file is a **reference**: never copy it; read it at the submodule path
+> below.
 
 ## Core documents
 
@@ -77,12 +79,13 @@ to what `docs/PROJECT_PROFILE.md` declares.
 
 | Profile | Applies to | Documents in force |
 |---|---|---|
-| `Core Baseline` | Every app | Root `CLAUDE.md` (via `CLAUDE_MD_GUIDELINE.md`, **MUST**); Root `AGENTS.md` (via `AGENTS_MD_GUIDELINE.md`, **MUST**); the 9 baseline `docs/` files, including `PROJECT_PROFILE.md`, `architecture.md`, `security.md` and `release_process.md` (`DOCS_FOLDER_GUIDELINE.md` §6, **MUST**); `guideline.md`; Core Baseline rules of `flutter_project_engineering_standard.md`; language packs for declared languages |
-| `Production App Extension` | Apps shipped to real users / QA / stores | The above **plus** `platform_store_readiness.md` (declared channels), the full `release_process.md`, `flutter_build_flavors_guide.md` (if using flavors), and the Production sections of the engineering standard |
+| `Core Baseline` | Every app | The Security Baseline (`flutter_project_engineering_standard.md` §15.1, `security.md` §1.1, **MUST**); Root `CLAUDE.md` (via `CLAUDE_MD_GUIDELINE.md`, **MUST**); Root `AGENTS.md` (via `AGENTS_MD_GUIDELINE.md`, **MUST**); the 9 baseline `docs/` files, including `PROJECT_PROFILE.md`, `architecture.md`, `security.md` and `release_process.md` (`DOCS_FOLDER_GUIDELINE.md` §6, **MUST**); `guideline.md`; Core Baseline rules of `flutter_project_engineering_standard.md`; language packs for declared languages |
+| `Production App Extension` | Apps shipped to real users / QA / stores | The above **plus** `platform_store_readiness.md` (declared channels), the full `release_process.md`, the OWASP sign-off in `security.md` §12, `flutter_build_flavors_guide.md` (if using flavors), and the Production sections of the engineering standard |
 | `Sensitive Data Extension` | Apps handling secrets, PII, health, finance, or local encrypted stores | The above **plus** the full `security.md` and the Sensitive Data sections of the engineering standard |
 
 `security.md` and `release_process.md` exist in every app; an app outside the matching profile
-keeps them short and says so at the top.
+keeps them short and says so at the top. Every app is secure by default: the Security Baseline
+applies whatever the profile, and the profiles only add controls on top.
 
 ## Where to start
 

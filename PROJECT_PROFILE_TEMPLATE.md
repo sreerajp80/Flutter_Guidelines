@@ -32,7 +32,9 @@
 
 ### 0.1 Data and privacy
 
-These answers decide the applicability profiles (§2) and the store privacy forms.
+These answers decide the applicability profiles (§2) and the store privacy forms. Every app
+follows the Security Baseline (engineering standard §15.1) whatever the answers are. If you are
+not sure whether some data is sensitive, treat it as sensitive.
 
 | Item | Value |
 |---|---|
@@ -44,6 +46,7 @@ These answers decide the applicability profiles (§2) and the store privacy form
 | Analytics | `<none / service>` |
 | Crash reporting | `<none / service>` |
 | Ads | `<none / network>` |
+| Other third-party SDKs that send data | `<none / name — what it sends>` (listed in `docs/security.md` §4) |
 | In-app purchases or subscriptions | `<none / what>` |
 | Device permissions | `<none>` or one per line: `<permission — why the app needs it>` |
 
@@ -58,7 +61,7 @@ These answers decide the applicability profiles (§2) and the store privacy form
 | Dart package name (`pubspec.yaml` `name`) | `<your_app>` |
 | Public support contact | `<support address or URL>` |
 | Website | `<https://...>` or `none` |
-| Privacy policy URL | `<https://...>` — required before any public store release |
+| Privacy policy URL | `<https://...>` — required before any public store release. Example for a public GitHub repo: `https://github.com/<owner>/<repo>/blob/main/PRIVACY.md`. Use the same URL in `app_config.json` (`privacyPolicy`) and every store console (`platform_store_readiness.md` §1) |
 | Copyright line | `© <year> <owner>` |
 | License of the app's own code | `<proprietary / MIT / Apache-2.0 / ...>` |
 
@@ -71,7 +74,9 @@ These answers decide the applicability profiles (§2) and the store privacy form
 ## 3. Target platforms and distribution
 
 Tick only the platforms the app ships on. Create only these platform folders
-(`flutter create --platforms=...`). For every ticked channel, the matching gate in
+(`flutter create --platforms=...`). This table is the **one place** for the minimum OS of each
+platform and its reason; other docs link here. For macOS, also note here whether the app ships
+universal or arm64 only (engineering standard §5.5.2). For every ticked channel, the matching gate in
 `platform_store_readiness.md` MUST pass before the first release to it.
 
 | Platform | Ship? | Minimum OS | Distribution channels |
@@ -106,6 +111,10 @@ Build flavors: `<none / dev + prod / dev + staging + prod>` (engineering standar
 | Signature badge (§1.7) | `<off>` or `<on>` |
 | Badge text — template language | `<e.g. "Made with {heart} by <Team>">` |
 | Badge text — each other language | `<translated, with {heart}>` |
+| Badge screen-reader text — each language | `<same words without the heart, e.g. "Made with love by <Team>">` |
+
+> Write the heart as `{heart}`, never as a ❤ or ❤️ emoji. These texts are the record; the agent
+> copies them into `madeWithLove` / `madeWithLoveA11y` in every ARB file (`guideline.md` §1.7).
 
 ## 6. Optional project-specific values
 
@@ -126,7 +135,7 @@ Build flavors: `<none / dev + prod / dev + staging + prod>` (engineering standar
 | IDE | `<...>` |
 | Can build iOS / macOS locally | `<yes / no / not needed>` — iOS and macOS builds need a Mac |
 | Git hosting | `<GitHub / other>` |
-| CI checks | `<yes — analyze/test only (engineering standard §19) / no>` |
+| CI checks | `<GitHub CI — analyze/test only (required on GitHub, engineering standard §19) / other host's CI / local checks before each merge>` |
 | Release owner (role) | `<role>` |
 
 Record roles and tool names only — no machine names, user names or local paths.

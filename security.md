@@ -3,9 +3,12 @@
 Fill in this document in full when the repository handles secrets, protected personal data, health data,
 financial data, private files, or any local encrypted store.
 
-Every app has this file (`DOCS_FOLDER_GUIDELINE.md` §6). If the `Sensitive Data Extension` does not
-apply, say so at the top, keep the file short, and fill in at least §10 (platform choices such as
-`allowBackup`), §11 (permissions) and §13 (data retention).
+Every app has this file (`DOCS_FOLDER_GUIDELINE.md` §6), and every app MUST meet the Security
+Baseline (engineering standard §15.1) — security is never optional. If the
+`Sensitive Data Extension` does not apply, say so at the top, keep the file short, and fill in at
+least §1.1 (Security Baseline), §3.1 (entry points), §10 (platform choices such as
+`allowBackup`), §11 (permissions) and §13 (data retention). When the `Production App Extension`
+applies, the short file also includes §12 (OWASP sign-off, engineering standard §15.3).
 
 ---
 
@@ -15,6 +18,7 @@ apply, say so at the top, keep the file short, and fill in at least §10 (platfo
 - Data sensitivity level: `low`, `moderate`, or `high`
 - Engineering standard profiles in force:
   - `Core Baseline`
+  - `Production App Extension` if applicable
   - `Sensitive Data Extension` if applicable
 - Platforms in scope (the declared platforms from `docs/PROJECT_PROFILE.md`; delete the rest):
   - `Android`
@@ -22,6 +26,28 @@ apply, say so at the top, keep the file short, and fill in at least §10 (platfo
   - `Windows`
   - `macOS`
   - `Linux`
+  - `Web`
+
+### 1.1 Security Baseline (Every App)
+
+Mark each line `verified` or `n/a` (with a short reason). The rules are in engineering standard
+§15.1. Re-check this list before every production release.
+
+| Area | Rule | Status |
+|------|------|--------|
+| Secrets | No real secrets in code, assets, `--dart-define` or native config; shipped keys restricted by the provider | `verified / n/a` |
+| Network | HTTPS only; certificate checks never disabled; cleartext off; ATS on; timeouts set | `verified / n/a` |
+| Tokens | Sign-in tokens and credentials only in platform secure storage; removed on sign-out | `verified / n/a` |
+| Sign-in | OAuth/OIDC with PKCE via the system browser, platform sign-in or passkeys; server enforces access | `verified / n/a` |
+| Outside input | Deep links, intents, imports, payloads, clipboard, platform channels validated (§3.1); parameterized SQL; no path traversal | `verified / n/a` |
+| Deep links | No sensitive action without user confirmation; verified App Links / Universal Links for callbacks | `verified / n/a` |
+| WebView | Not used, or allowlisted HTTPS origins, JavaScript only if needed, no bridge to untrusted content | `verified / n/a` |
+| Platform hardening | Android components not exported unless needed; `PendingIntent` immutable; narrow `FileProvider`; private app folders | `verified / n/a` |
+| Randomness / crypto | `Random.secure()` for security values; standard, maintained crypto libraries only | `verified / n/a` |
+| Release build | No debug menus, test accounts or backdoors; `debuggable=false`; `--obfuscate` | `verified / n/a` |
+| Third-party SDKs | Each SDK listed in §4 with what it collects; no secrets or PII in crash reports or analytics | `verified / n/a` |
+| Data minimization | Only data that a feature needs is collected and kept | `verified / n/a` |
+| Web (if declared) | No secrets in the web bundle; Content Security Policy set where hosting allows | `verified / n/a` |
 
 ---
 
@@ -58,6 +84,22 @@ Document the threats the product is designed to address and those it explicitly 
 - `<attacks requiring OS-level compromise>`
 - `<nation-state adversaries>`
 
+### 3.1 Entry Points And Attack Surface
+
+List every way data or commands reach the app from outside, and how each is checked
+(engineering standard §15.1, "Input from outside the app"). Delete rows that do not exist.
+
+| Entry Point | Example | Validation | Sensitive Action Possible? |
+|-------------|---------|------------|----------------------------|
+| Deep link / app link | `<https://example.com/item/42>` | `<allowed hosts and paths; id format checked>` | `<no / only after user confirms>` |
+| Android intent / share target | `<ACTION_SEND text>` | `<type and size checked>` | `<no>` |
+| File import | `<backup .zip>` | `<size limit; type check; no ../ paths>` | `<no>` |
+| Push notification payload | `<message id>` | `<fields checked; no action without user tap>` | `<no>` |
+| Network API response | `<REST JSON>` | `<schema checked; errors handled>` | `<n/a>` |
+| WebView content | `<help pages>` | `<HTTPS allowlist; no JS bridge>` | `<no>` |
+| Platform channel | `<native plugin call>` | `<argument types checked>` | `<no>` |
+| Clipboard / QR code | `<pasted code>` | `<format checked>` | `<no>` |
+
 ---
 
 ## 4. Sensitive Data Inventory
@@ -67,6 +109,14 @@ Document the threats the product is designed to address and those it explicitly 
 | `<secret>` | `<example>` | `<memory/db/export>` | `<control>` |
 | `<token>` | `<example>` | `<memory/storage>` | `<control>` |
 | `<user data>` | `<example>` | `<storage/logs?>` | `<control>` |
+
+### Third-Party SDKs
+
+List every analytics, ads, crash-reporting or other SDK that can send data off the device.
+
+| SDK | What It Collects | Where It Sends It | Why It Is Needed |
+|-----|------------------|-------------------|------------------|
+| `<sdk>` | `<data>` | `<service>` | `<reason>` |
 
 ---
 
@@ -86,7 +136,15 @@ Document the threats the product is designed to address and those it explicitly 
 ### In Transit
 
 - Network use: `<none / https api / internal network>`
-- Transport protections: `<tls/pinning/none>`
+- Transport protections: `<tls / tls + pinning>`
+- Rules (engineering standard §15.1):
+  - HTTPS only; no cleartext HTTP in release.
+  - Certificate checks are never disabled (no `badCertificateCallback` returning `true`, no
+    trust-all `HttpOverrides`).
+  - Connect and receive timeouts: `<values>`
+- Certificate pinning: `<not used / used>` — if used, record why, who controls certificate
+  rotation, and the backup pin. Pinning is not the default because a wrong pin locks all users
+  out.
 
 ---
 
@@ -117,6 +175,20 @@ Document only the design, not the secrets.
 - Protected-route strategy: `<where enforced — go_router redirect or state guard>`
 - Lock screen implementation: `<path to the lock widget/screen>`
 
+### 7.1 Usability Balance
+
+Security must not make the app hard to use or slow (engineering standard §15.6). Record:
+
+- Lock grace period after backgrounding: `<none / N seconds — and whether the user can change it>`
+- Fallback when biometrics are not available: `<device PIN / app PIN / password>`
+- Response to rooted, jailbroken or emulator devices: `<none / warn / limit features / block — and why>`
+- Heavy crypto off the main isolate: `<where — e.g. key derivation in compute()>`
+- Key-derivation cost tuned for: `<slowest target device and measured unlock time>`
+
+| Control That Adds A Step For The User | Why It Is Needed |
+|---------------------------------------|------------------|
+| `<e.g. re-authenticate before export>` | `<export reveals all data>` |
+
 ---
 
 ## 8. Binary Protections
@@ -139,9 +211,12 @@ machine code. Do not treat it as a substitute for sound data security, proper se
 or server-side enforcement of sensitive operations.
 
 Without obfuscation, the low-effort attack surface is larger — an attacker can:
-- Read exact class names, method names, and string literals from the binary.
+- Read exact class and method names from the binary.
 - Identify security-sensitive paths (authentication, encryption, validation logic) quickly.
 - Reconstruct a partial view of the app's architecture from the symbol table alone.
+
+Obfuscation does **not** hide string literals: they stay readable in every build. Never put a
+secret in a string.
 
 The debug symbol files produced by `--split-debug-info` MUST be:
 - Stored securely and retained for the lifetime of the released version.
@@ -210,7 +285,14 @@ and inject code.
     `flutter_windowmanager` plugin is no longer maintained).
   - Apply on all screens showing sensitive data; remove on non-sensitive screens if UX requires.
 - `android:debuggable`: MUST be `false` in release builds (verify per section 8.3).
-- Root / integrity detection: `<none, or Play Integrity API>`
+- Cleartext traffic: `usesCleartextTraffic="false"`; network security config, if present, has
+  `cleartextTrafficPermitted="false"` (`release_process.md` §6.5).
+- Exported components: every component is `android:exported="false"` unless it must be reached
+  from outside; list the exported ones and how they validate input: `<list>`
+  (`release_process.md` §6.7).
+- `PendingIntent`: `FLAG_IMMUTABLE` unless a mutable one is required: `<where and why>`.
+- `FileProvider` paths: `<the narrow paths shared>`.
+- Root / integrity detection: `<none, or Play Integrity API>` — response recorded in §7.1.
 
 ### iOS
 
@@ -221,13 +303,20 @@ and inject code.
     `sceneWillResignActive(_:)` on your `UIWindowSceneDelegate` (or via
     `FlutterSceneLifeCycleDelegate` in a plugin).
   - Legacy `AppDelegate`-only projects: apply the overlay in `applicationWillResignActive`.
+  - iOS cannot block screenshots. Hide sensitive content while the screen is recorded or
+    mirrored (capture state: `UITraitCollection.sceneCaptureState` on UIScene apps,
+    `UIScreen.isCaptured` in older code). Capture detection is best-effort, not a guarantee.
+    Optionally react to
+    `UIApplication.userDidTakeScreenshotNotification`: `<what this app does>`
+    (engineering standard §15.2).
   - See `docs/guidelines/flutter_build_flavors_guide.md` for the UIScene migration mechanics.
 - Keychain usage: `<usage — e.g. flutter_secure_storage uses Keychain automatically>`
 - Required privacy descriptions in `Info.plist`:
   - `<NSCameraUsageDescription if applicable>`
   - `<NSPhotoLibraryUsageDescription if applicable>`
   - `<Other permissions used>`
-- ATS (App Transport Security): if offline app, verify no `NSAllowsArbitraryLoads` is set.
+- ATS (App Transport Security): stays on for every app; verify no `NSAllowsArbitraryLoads` is
+  set. Any narrower exception is listed here with its reason.
 
 ### Windows
 
@@ -287,18 +376,19 @@ Permission review rules:
 ## 12. OWASP Mobile Top 10 Compliance
 
 Review and sign off each item before every production release. This is a MUST under the
-`Sensitive Data Extension` and a SHOULD for other production apps (engineering standard §15.3).
+`Sensitive Data Extension` and the `Production App Extension` (engineering standard §15.3).
+Mark items that do not apply as `n/a`.
 
 | ID | Risk | Control | Status |
 |----|------|---------|--------|
-| M1 | Improper Credential Usage | No hardcoded secrets; platform secure storage used | `verified / n/a / risk-accepted` |
+| M1 | Improper Credential Usage | No secrets shipped in the app; shipped keys restricted by the provider; platform secure storage used for tokens | `verified / n/a / risk-accepted` |
 | M2 | Inadequate Supply Chain Security | `pubspec.lock` committed; dependency audit performed; licenses verified | `verified / n/a / risk-accepted` |
-| M3 | Insecure Authentication | App lock enforced; background lock on `paused` state | `verified / n/a / risk-accepted` |
-| M4 | Insufficient Input/Output Validation | All user input validated; DB writes sanitized via parameterized queries | `verified / n/a / risk-accepted` |
-| M5 | Insecure Communication | No network traffic (offline) OR TLS-only with valid certificates | `verified / n/a / risk-accepted` |
+| M3 | Insecure Authentication/Authorization | Server enforces access; OAuth/OIDC with PKCE via the system browser if the app signs in; app lock with background lock where used | `verified / n/a / risk-accepted` |
+| M4 | Insufficient Input/Output Validation | All outside input validated (§3.1); parameterized queries; no path traversal | `verified / n/a / risk-accepted` |
+| M5 | Insecure Communication | No network traffic (offline) OR TLS-only with valid certificates; certificate checks never disabled | `verified / n/a / risk-accepted` |
 | M6 | Inadequate Privacy Controls | Data inventory reviewed; no PII in logs; sensitive fields excluded from backup | `verified / n/a / risk-accepted` |
-| M7 | Insufficient Binary Protections | `--obfuscate` applied; `android:debuggable=false` verified; ProGuard applied | `verified / n/a / risk-accepted` |
-| M8 | Security Misconfiguration | Permissions minimal; backup config explicit; debug features disabled in prod | `verified / n/a / risk-accepted` |
+| M7 | Insufficient Binary Protections | `--obfuscate` applied; `android:debuggable=false` verified; R8 / ProGuard rules verified (Android) | `verified / n/a / risk-accepted` |
+| M8 | Security Misconfiguration | Permissions minimal; backup config explicit; no accidental exported components; debug features and backdoors absent in prod | `verified / n/a / risk-accepted` |
 | M9 | Insecure Data Storage | No sensitive data in `SharedPreferences`; no sensitive data in unencrypted files | `verified / n/a / risk-accepted` |
 | M10 | Insufficient Cryptography | Versioned encrypted formats; secure key derivation; no hardcoded keys | `verified / n/a / risk-accepted` |
 
@@ -342,8 +432,9 @@ Define what data is stored, how long it lives, and what triggers deletion.
   phone) can bring it back unless the backup rules exclude it. Verify the backup and
   data-extraction rules explicitly (§10).
 - iOS: Keychain items persist across uninstall, whatever accessibility class they use. For
-  sensitive keys, delete Keychain items on first launch after reinstall detection (compare stored install UUID
-  against a newly generated one).
+  sensitive keys, use **first-run detection**: keep a marker in `SharedPreferences`
+  (`UserDefaults`), which is deleted on uninstall. At startup, if the marker is missing, delete
+  the app's Keychain items, then write the marker.
 - Windows: depending on the plugin version, `flutter_secure_storage` stores secrets in Windows
   Credential Manager or in DPAPI-encrypted files under the app's data folder; check the
   version you use. Either can persist across app reinstall. Implement a first-run detection and credential purge if a clean uninstall
@@ -389,6 +480,9 @@ Define what data is stored, how long it lives, and what triggers deletion.
 | Obfuscation | Release build verification | Confirm `--obfuscate` flag present in release commands |
 | Debuggable | Release build verification | `android:debuggable=false` confirmed in merged manifest |
 | Permission audit | Release build verification | Merged manifest contains only declared, needed permissions |
+| Entry-point validation | Unit or widget | Bad deep links, intents and payloads are rejected; no sensitive action without confirmation |
+| Import path safety | Unit | Archive entries with `..` or absolute paths are rejected; size limits enforced |
+| Transport security | Code review + release verification | No cleartext, no disabled certificate checks, no trust-all overrides |
 
 ### Required Test Vectors Or Regression Areas
 
@@ -424,6 +518,9 @@ Define what data is stored, how long it lives, and what triggers deletion.
 
 Complete before every production release.
 
+- [ ] Security Baseline (§1.1) re-verified — every line `verified` or `n/a` with a reason.
+- [ ] Entry points (§3.1) current and each one validated.
+- [ ] Usability balance (§7.1) reviewed — no new friction without a recorded reason.
 - [ ] Threat model reviewed and current.
 - [ ] Sensitive data inventory updated.
 - [ ] Logging policy reviewed — no new log statements introduce PII exposure.

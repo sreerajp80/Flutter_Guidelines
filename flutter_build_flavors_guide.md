@@ -212,15 +212,17 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            resValue("string", "app_name", "MyApp Dev")
         }
         create("prod") {
             dimension = "environment"
-            resValue("string", "app_name", "MyApp")
         }
     }
 }
 ```
+
+Set the app name per flavor in `strings.xml` files (see "Flavor-Specific Resource Files"), not
+with `resValue(...)`. A `resValue` string has one value for every language, so the launcher name
+could not be translated (`guideline.md` §1.8, `platform_store_readiness.md` §2.1).
 
 ---
 
@@ -279,9 +281,9 @@ keytool -genkey -v \
 Keystore rules:
 - Keep the `.jks` file in `android/` and never commit it to source control — it is
   protected by `.gitignore` (see Step 3).
-- Back it up in at least two separate secure locations (cloud storage + physical).
-  Losing it permanently prevents you from publishing updates to Google Play for this app.
-- Store the passwords in a password manager. They cannot be recovered from the keystore file.
+- Back it up and store its passwords as `guideline.md §2.3` says (at least two separate secure
+  backups, at least one of them offline). Losing it permanently prevents you from publishing
+  updates to Google Play for this app.
 
 #### Step 2 — Create `android/key.properties` (Strategy A)
 
@@ -348,11 +350,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            // No proguardFiles(...) line needed: the Flutter Gradle plugin turns on R8 and adds
+            // android/app/proguard-rules.pro by itself when that file exists ("ProGuard / R8
+            // Rules" below). A proguardFiles line that names a missing file fails the build.
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -378,11 +378,11 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            resValue("string", "app_name", "MyApp Dev")
+            // app_name comes from src/dev/res/values*/strings.xml (translatable).
         }
         create("prod") {
             dimension = "environment"
-            resValue("string", "app_name", "MyApp")
+            // app_name comes from src/prod/res/values*/strings.xml (or src/main/res).
         }
     }
 }
@@ -434,14 +434,28 @@ android/app/src/
 |-- dev/
 |   `-- res/
 |       |-- mipmap-hdpi/       # Dev app icon (with badge)
-|       `-- values/
-|           `-- strings.xml
+|       |-- values/
+|       |   `-- strings.xml    # app_name in the template language, plus " Dev"
+|       `-- values-<code>/
+|           `-- strings.xml    # app_name in each other declared language, plus the dev suffix
 `-- prod/
     `-- res/
         |-- mipmap-hdpi/       # Production app icon
-        `-- values/
-            `-- strings.xml
+        |-- values/
+        |   `-- strings.xml    # app_name in the template language
+        `-- values-<code>/
+            `-- strings.xml    # app_name in each other declared language
 ```
+
+```xml
+<!-- android/app/src/prod/res/values/strings.xml -->
+<resources>
+    <string name="app_name">MyApp</string>
+</resources>
+```
+
+`app_name` MUST match `appName` in `assets/config/app_config.json` for each language
+(`guideline.md` §1.8).
 
 ---
 
@@ -521,7 +535,9 @@ Create `android/app/proguard-rules.pro` only when you need a rule:
 ```
 
 No change to `buildTypes.release` is needed for this file: the Flutter Gradle plugin picks it
-up. A `proguardFiles(...)` line in `build.gradle.kts` is optional and harmless.
+up. If you do add a `proguardFiles(...)` line in `build.gradle.kts`, the file it names MUST
+exist (it may be empty): a missing file fails the release build with "Supplied proguard
+configuration does not exist".
 
 Always test the production release build after adding a new dependency. R8 issues only surface
 in release mode and can be hard to trace if not caught immediately after the dependency is added.
@@ -672,6 +688,19 @@ Archive uses `Release-<flavor>`. Tick **Shared** so the schemes are committed.
 <string>$(FLAVOR_APP_NAME)</string>
 ```
 
+> **Translated app names and flavors.** A `CFBundleDisplayName` entry in a language's
+> `InfoPlist.strings` replaces `$(FLAVOR_APP_NAME)`, so the dev suffix would disappear in that
+> language. Pick one way and record it in `docs/architecture.md` §15:
+>
+> - **Default:** accept it. In a translated language the dev build shows the translated name
+>   without " Dev"; the dev icon badge (engineering standard §17.5) still tells the builds
+>   apart. In the template language the suffix still shows.
+> - Or, if testers must see the suffix in every language, generate each language's
+>   `InfoPlist.strings` per flavor in a build script before the build (for example from a
+>   per-flavor folder), so the dev values already contain the suffix.
+>
+> Prod builds MUST show the translated names (`guideline.md` §1.8).
+
 **5. Map the configurations in `ios/Podfile`**, then run `pod install`:
 
 ```ruby
@@ -808,7 +837,7 @@ msix_config:
   msix_version: 1.0.0.0
   logo_path: assets/icons/app_icon.png
   capabilities: internetClient   # only what the app uses; the msix package adds runFullTrust itself
-  languages: en-us
+  languages: en-us               # one entry per declared language, e.g. en-us,ml-in
   architecture: x64              # one architecture per package: x64 or arm64
   build_windows: false           # package the hardened build made above — see the warning below
 ```
@@ -1033,7 +1062,8 @@ To support this workflow, the native projects typically need:
 
 **iOS:**
 - Xcode schemes aligned with flavor names.
-- xcconfig files per flavor per build configuration.
+- `Debug-<flavor>` / `Profile-<flavor>` / `Release-<flavor>` build configurations, with the
+  bundle id and display name set per configuration in Build Settings (or xcconfig files).
 - Provisioning profiles per flavor bundle ID.
 - Flavor-specific app icons in asset catalogs.
 - Distribution profile required for `prod --release`; automatic signing for debug and dev.

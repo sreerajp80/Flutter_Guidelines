@@ -296,8 +296,9 @@ Rules:
 - Optional nicety: if a key equals `email` (case-insensitive), make its row tappable to
   open `mailto:<value>`; if the value is an `https://` URL (`website`, `privacyPolicy`), open it
   in the browser.
-- **Store apps SHOULD show a privacy-policy row.** Several stores expect the policy to be reachable
-  from inside the app as well as from the listing (`platform_store_readiness.md`).
+- **Apps on a public store MUST show a privacy-policy row** (`privacyPolicy`). The store gate
+  requires the policy to be reachable from inside the app as well as from the listing
+  (`platform_store_readiness.md` §1). Other apps SHOULD show it when they have a policy.
 
 Reference snippet (from the reference About screen):
 
@@ -348,13 +349,20 @@ explicitly; everything else comes from the `details` loop. Their labels ("Versio
 ### 1.7 About screen — optional signature badge
 
 A project MAY end its About screen with a short **signature badge** — for example
-"Made with ❤️ by <Team>" or "Made with ❤️ from <Place>". It is **off by default**. The project
-turns it on, and fixes its exact wording, in the About section of `docs/PROJECT_PROFILE.md`.
+"Made with {heart} by <Team>" or "Made with {heart} from <Place>", where `{heart}` is drawn as a
+red heart icon. It is **off by default**. The project turns it on, and fixes its exact wording, in
+the About section of `docs/PROJECT_PROFILE.md`.
 
 When the badge is enabled, these rules apply:
 
-- **The text comes only from the project profile.** It does not come from `app_config.json`. Do not
-  change or remove it unless the profile changes first.
+- **Where the text lives.** `docs/PROJECT_PROFILE.md` §5 is the *decision record*: it says
+  whether the badge is on and gives the exact text for every declared language. The app reads the
+  text **only from the ARB files** (`madeWithLove` and `madeWithLoveA11y` in every
+  `app_<code>.arb`). It never comes from `app_config.json` and is never a literal in Dart. When the
+  profile text changes, update the ARB files to match. Do not change or remove the text unless the
+  profile changes first.
+- **Use `{heart}`, never an emoji.** The profile text and the ARB text MUST mark the heart with the
+  `{heart}` placeholder. They MUST NOT contain a ❤ or ❤️ character (see the note below the widget).
 - **It is the last element** on the About screen, after the `details` rows, with vertical
   breathing room above it (≥ 24 dp) and safe-area padding below, horizontally centered.
 - **The heart is red `#E53935`**, held in one named design token (engineering standard §6.1),
@@ -381,6 +389,13 @@ ARB entries (one pair per declared language — see engineering standard §8):
 "@madeWithLoveA11y": { "description": "Screen-reader text for the About badge" }
 ```
 
+The "from a place" form works the same way — only the words change:
+
+```json
+"madeWithLove": "Made with {heart} from <Place>",
+"madeWithLoveA11y": "Made with love from <Place>"
+```
+
 `lib/l10n/app_<code>.arb` — the same two keys, translated:
 
 ```json
@@ -391,8 +406,21 @@ ARB entries (one pair per declared language — see engineering standard §8):
 The `{heart}` placeholder MAY sit anywhere in the string (start, middle or end) — word order
 differs between languages, and the reference widget below handles every position.
 
-A worked example of an enabled badge in three languages is in
-`profiles/example_en_ml_sa_profile.md`.
+**Translating the badge.** The translations do not have to copy the English pattern word for word:
+
+- In English the heart *stands for* the word "love" ("Made with ❤ from India").
+- In some languages the heart cannot replace a word, because that word carries a grammar ending
+  (for example Malayalam സ്നേഹത്തോടെ = "with love"). There the translation MAY write the word for
+  love and put `{heart}` after it as decoration ("With love ❤ from India").
+- A translation MAY also leave out a word the English has (such as "made") when the shorter form is
+  the natural one in that language.
+
+This is allowed and is **not** a mistake to "fix". The rules are only: every `madeWithLove` keeps
+exactly one `{heart}`, the wording matches the project profile, a fluent reader of that language
+has approved it, and `madeWithLoveA11y` reads naturally on its own, without the heart.
+
+A worked example of an enabled badge in three languages (English, Malayalam, Sanskrit), with
+English back-translations, is in `profiles/example_en_ml_sa_profile.md`.
 
 Reference widget — `lib/widgets/made_with_love.dart`:
 
@@ -451,6 +479,31 @@ class MadeWithLove extends StatelessWidget {
 > guarantees an exact vector heart in the `AppColors.heart` red on every screen and OS version.
 
 
+### 1.8 The app name
+
+The app name appears in many places. To keep them the same:
+
+- **In the app** (About screen, desktop window title) the name comes from `appName` in
+  `app_config.json`, resolved for the active language. Never write the name as a literal in Dart.
+  A flavor may add a suffix (`AppFlavorConfig.nameSuffix`, engineering standard §5.2).
+- **In the OS** (launcher, task bar, installed-apps list) the name is set in each declared
+  platform's own files: Android `@string/app_name` in `res/values/strings.xml` and one
+  `res/values-<code>/strings.xml` per language; iOS / macOS `CFBundleDisplayName` and
+  `InfoPlist.strings` per language; Windows `Runner.rc` and `msix_config` `display_name`; Linux
+  the `.desktop` file `Name` (with `Name[<code>]` per language) and the Snap `title`; Web the
+  `<title>` in `web/index.html` and `name` / `short_name` in `web/manifest.json`.
+  `flutter create` does not write a Linux `.desktop` file: create it when you set up packaging
+  (`platform_store_readiness.md` §6.1).
+- The OS name MUST match `appName` for each declared language (plus the flavor suffix for dev
+  builds) wherever the platform can translate it. Places that hold only one value (Windows
+  `Runner.rc`, MSIX `display_name`, Snap `title`, the Web `<title>` and `manifest.json`) use the
+  template-language name. Do not add a second app-name key in ARB.
+- On iOS / macOS a translated name in `InfoPlist.strings` replaces the `CFBundleDisplayName`
+  build-setting value, so it also hides a flavor suffix. Release (prod) builds MUST show the
+  translated names. Dev builds MAY lose the suffix in translated languages (the dev icon badge
+  still marks them); see
+  `flutter_build_flavors_guide.md`, "Xcode Build Configurations And Schemes".
+
 > **Note on other constants.** This JSON pattern is only for **About-screen** metadata.
 > Technical constants (database names, preference keys, thresholds, channel IDs) do NOT
 > go in the JSON. Keep those in a plain Dart file such as
@@ -501,8 +554,11 @@ android/*.jks
 android/*.keystore
 ```
 
-Keep a secure, offline backup of each app's keystore. Losing it means you can no longer
-publish updates under the same signature.
+**Backups (source of truth for every signing secret).** Keep at least **two** separate secure
+backups of each app's keystore and its passwords, and at least **one** of them offline (not in
+cloud storage). Keep the passwords in a password manager; they cannot be recovered from the
+keystore file. Losing the keystore means you can no longer publish updates under the same
+signature.
 
 ### 2.4 Production release build commands (Android)
 
@@ -578,7 +634,8 @@ flutter build apk `
   --split-debug-info=build/symbols/android-prod-<version>/ `
   --split-per-abi
 ```
-*Output artifacts:* `build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk`, etc.
+*Output artifacts:* `build/app/outputs/flutter-apk/app-arm64-v8a-prod-release.apk`, etc. (Flutter
+copies the APKs here; the build log prints the exact names.)
 
 ##### Example 4: Multi-Flavor App — Production App Bundle (Google Play Store)
 
@@ -616,8 +673,9 @@ no flavors).
 ### 2.5 Signing on the other platforms
 
 This section (§2) covers Android only. Signing for the other declared platforms follows the same
-two rules — **signing material never enters the repository**, and **every secret has an offline
-backup** — and is described where the platform is set up:
+two rules — **signing material never enters the repository**, and **every secret is backed up as
+in §2.3** (at least two backups, at least one offline) — and is described where the platform is
+set up:
 
 | Platform | Signing material | Where it is described |
 |---|---|---|
@@ -643,6 +701,7 @@ lib/
   core/
     config/          # AppConfig + ConfigService (About). REQUIRED, fixed path.
     constants/       # app_constants.dart — technical constants, values only
+    logging/         # app_logger.dart — AppLogger (engineering standard §14)
     errors/          # error/exception types (optional)
     utils/           # small helpers, extensions
   models/            # data models / entities
@@ -672,7 +731,8 @@ Rules:
 - `l10n.yaml` MUST exist at the project root, and **one ARB file per declared language** MUST
   exist in `lib/l10n/`, with the template language (usually `app_en.arb`) as the template. All
   user-visible text MUST come from `AppLocalizations`, never a raw string literal in a widget —
-  even in a single-language app. Full rules:
+  even in a single-language app. The one exception is the About-screen values, which come from
+  `app_config.json` locale maps (§1). Full rules:
   [flutter_project_engineering_standard.md §8](flutter_project_engineering_standard.md).
 - **Key parity is mandatory**: every ARB key exists in every declared language's file with a real
   translation. A feature is not done until its strings exist in every declared language (§8.7).
@@ -732,7 +792,10 @@ Rules:
 - [ ] Menu / label / button / tab text is within the length budget in every declared language
       (**MUST**, §8.6).
 - [ ] Every icon-only control has a localized tooltip (**MUST**, §7.8).
-- [ ] No hard-coded user-visible strings — all screen text comes from `AppLocalizations` (**MUST**).
+- [ ] No hard-coded user-visible strings — all screen text comes from `AppLocalizations`, except
+      the About-screen values from `app_config.json` (§1) (**MUST**).
+- [ ] The app name is the same in `app_config.json` and in every declared platform's files, in
+      every declared language (§1.8).
 - [ ] `assets/config/app_config.json` exists with `appName`, `description`, `version`,
       `build`, `details`; every display value has an entry per declared language (§1.2).
 - [ ] `assets/config/` registered under `flutter: assets:` in `pubspec.yaml`.
@@ -743,7 +806,8 @@ Rules:
 - [ ] About screen renders `details` dynamically (loops the map, no hard-coded field names), with
       localized labels (`aboutDetail<Key>`) and locale-resolved values (§1.6).
 - [ ] If the profile enables the signature badge: About screen ends with it — red heart,
-      centered, localized words (§1.7).
+      centered, localized words from `madeWithLove` / `madeWithLoveA11y` in every ARB file, using
+      `{heart}` and no emoji (§1.7).
 - [ ] App icon generated for every declared platform; no default Flutter icon remains
       (engineering standard §17.5).
 - [ ] `lib/` follows the baseline layout in §3 (subset is fine for small apps).
@@ -754,8 +818,11 @@ Rules:
       both git-ignored (§2).
 - [ ] Android: production builds run with `--release`, `--obfuscate`, and `--split-debug-info` (§2.4).
 - [ ] iOS / macOS / Windows / Linux: signing set up as in §2.5, with no signing material in git.
-- [ ] Every release build uses `--obfuscate` and `--split-debug-info`; debug symbols archived
-      securely alongside the release artifacts.
+- [ ] Every release build for a native platform (Android, iOS, Windows, macOS, Linux) uses
+      `--obfuscate` and `--split-debug-info`; debug symbols archived securely alongside the
+      release artifacts. Web: see `release_process.md` §11C.
+- [ ] The Security Baseline is followed (engineering standard §15.1) and `docs/security.md`
+      §1.1 is filled in — every line `verified` or `n/a` with a reason.
 - [ ] GitHub CI runs only the analyze/test checks; release artifacts for every
       declared platform are built locally (engineering standard §19).
 - [ ] The readiness gate of every declared distribution channel passed before the first upload

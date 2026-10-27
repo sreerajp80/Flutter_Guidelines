@@ -96,7 +96,8 @@ who does not read it. Never use Hindi anywhere as a substitute, crutch, or fallb
   - Causative passive of `या` (go) is `निर्याप्यते` / `निर्याप्यताम्` (Export), never `निर्यात्यताम्`.
   - "Confirm" is `स्थिरीक्रियताम्` or `दृढीक्रियताम्` (let it be made firm), never `संपुष्यताम्` (which means "let it be nourished").
   - Do not use Hindi loanwords for concepts that have native Sanskrit terms (use `उपयोक्तृविवरणम्` for Account, never Hindi `खाता`; `लेखा` strictly means a line/furrow).
-  - Use `ध्वनिः` for audio/sound to avoid confusion with `शब्दः` (Word).
+  - Use `ध्वनिः` for Sound and `श्रव्यम्` for Audio (audio content). Never use `शब्दः` for either:
+    it means Word.
 - **Form conventions**:
   - A button or menu item (action commanding the app): polite `-ताम्` imperative (`लोट्`). For a verb
     that takes an object it is passive (`कर्मणि`), e.g. `रक्ष्यताम्` (Save), `अन्विष्यताम्` (Search); for a
@@ -151,6 +152,10 @@ fi
 exit 0
 ```
 
+> **Project that also declares Hindi (`hi`).** The script checks the whole `app_config.json`, so
+> the real Hindi entries there would fail it. Remove `app_config.json` from the file list in that
+> case, and check its `sa` entries with a JSON-aware script or by review.
+>
 > The gate is a smoke test, not a proof of correctness: passing it means no obvious Hindi marker is
 > present, not that the Sanskrit is good. Human review still applies.
 > Standalone words (था, थे, थी, हो, है, हैं, हूं, और) match only between word edges: whitespace,
@@ -173,8 +178,8 @@ Malayalam UI strings must sound natural and idiomatic to native Malayalam speake
   - Number: `സംഖ്യ` (never `നമ്പർ`).
   - Page: `താൾ` (never `പേജ്`).
   - Widely established digital loanwords (such as `ഹോം`, `മെനു`, `പ്രൊഫൈൽ`, `അക്കൗണ്ട്`, `ഡൗൺലോഡ്`,
-    `ഓഫ്‌ലൈൻ`, `തീം`, `ഫയൽ`, `ഫോൾഡർ`, `ലിങ്ക്`, `ലൈസൻസ്`) are accepted where no single native term
-    carries universal recognition.
+    `ഓഫ്‌ലൈൻ`, `തീം`, `ഫയൽ`, `ഫോൾഡർ`, `ലിങ്ക്`, `ലൈസൻസ്`, `ഓഡിയോ`, `വീഡിയോ`, `ഇമെയിൽ`, `ഫോൺ`,
+    `ലോഡ്`) are accepted where no single native term carries universal recognition.
 - **Action buttons use verb forms**: Action buttons commanding an operation MUST use the verbal
   form ending in `-ക്കുക` / `-ക` (`തിരുത്തുക`, `സൂക്ഷിക്കുക`, `നീക്കുക`, `തുറക്കുക`, `പുറത്തുകടക്കുക`,
   `ലോഗൗട്ട് ചെയ്യുക`), never a bare English noun or uninflected loan.
@@ -212,9 +217,12 @@ Malayalam UI strings must sound natural and idiomatic to native Malayalam speake
 
 ### 4.4 Standard UI Glossary
 
-Use these exact terms across all apps that declare these languages. When a term you need is missing, add it
-**here**, in this pack, rather than inventing inconsistent per-app variants. All short UI terms
-MUST fit within the 22-character limit defined in §5 of this pack.
+Use these exact terms across all apps that declare these languages. When a term you need is
+missing, do not edit this pack from an app project (the guidelines submodule is read-only).
+Write a note for the user (`DOCS_FOLDER_GUIDELINE.md` §1.1) so the term can be added here, and
+until then record it in the project's `docs/glossary.md`, marked "needs native-reader review".
+Do not invent inconsistent per-app variants. All short UI terms MUST fit within the 22-character
+limit defined in §5 of this pack.
 
 **Review rule.** A new or changed Malayalam or Sanskrit glossary term MUST be reviewed by a fluent
 reader before any app uses it. The change that adds the term lists it in its change log as
@@ -409,10 +417,19 @@ reader before any app uses it. The change that adds the term lists it in its cha
 | Contact | ബന്ധപ്പെടുക | सम्पर्कः |
 | Terms | നിബന്ധനകൾ | नियमाः |
 | Privacy policy | സ്വകാര്യതാ നയം | गोपनीयतानीतिः |
+| Made with {heart} from India (optional badge, `madeWithLove`) | സ്നേഹത്തോടെ {heart} ഇന്ത്യയിൽ നിന്ന് | सस्नेहं निर्मितम् {heart} भारततः |
+| Made with love from India (badge screen-reader text, `madeWithLoveA11y`) | സ്നേഹത്തോടെ ഇന്ത്യയിൽ നിന്ന് | सस्नेहं निर्मितम् भारततः |
 
 > About-screen row labels use the `aboutDetail<Key>` pattern (`guideline.md` §1.6), which is exempt
 > from the short-label budget, so a long row label may wrap to two lines. Do not copy that liberty into a
 > toolbar or a tab.
+
+> The badge rows apply only when the project profile turns the badge on (`guideline.md` §1.7).
+> They are example wording: the project profile is the record for the badge text, and its
+> wording wins over these rows.
+> In Malayalam and Sanskrit the word for love is written out and the heart follows as decoration;
+> the Malayalam form also has no word for "made". This is intended — do not reword it to copy the
+> English pattern (`profiles/example_en_ml_sa_profile.md` gives back-translations).
 
 ## 5. Short-label budget for these languages
 
@@ -421,11 +438,12 @@ These limits extend the generic budget table in standard §8.6:
 | Language | Target | Hard limit |
 |---|---|---|
 | Malayalam | 1–2 words | 22 characters |
-| Sanskrit | 1 word (nominal form preferred) | 22 characters |
+| Sanskrit | 1 word — nominal for titles and labels, imperative for buttons | 22 characters |
 
 - In Sanskrit follow the form convention in §4.1 of this pack: a nominal form for titles, tabs and
-  labels (`अन्वेषणम्`), a single-word polite imperative for buttons (`अन्विष्यताम्`). Never a
-  multi-word verb phrase.
+  labels (`अन्वेषणम्`), a polite imperative for buttons (`अन्विष्यताम्`). A button is one
+  imperative verb, optionally with one indeclinable or object word when the meaning needs it
+  (`सर्वं चीयताम्` Select all, `पुनः प्रयत्यताम्` Retry). Never a longer verb phrase.
 - In Malayalam prefer the common everyday word over a Sanskritized formal one, unless the app's
   subject matter calls for the formal register.
 - Never ALL CAPS in Malayalam or Sanskrit.

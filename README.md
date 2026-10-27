@@ -44,12 +44,13 @@ This repository is a guideline set, not an app. A project adds it as a Git submo
 `docs/guidelines/` (see [GUIDELINES_MANIFEST.md](GUIDELINES_MANIFEST.md)). The submodule is
 **read-only** for the project: a project never edits, pulls, checks out or commits it. Only the
 user updates its version (see [DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md) §1.1). Its
-files are of two kinds:
+files are of three kinds:
 
 | Kind | Files | What the app does with them |
 |---|---|---|
 | **Templates** | `PROJECT_PROFILE_TEMPLATE.md` (→ `PROJECT_PROFILE.md`), `architecture.md`, `security.md`, `release_process.md` | Copy into the app's `docs/` folder and fill in. The local copy is the truth for that app. |
-| **References** | Everything else (`guideline.md`, the engineering standard, the flavors guide, the store gates, the `*_GUIDELINE.md` files, language packs, profiles) | Never copy. Read them in place at `docs/guidelines/<file>`. |
+| **Pointer file** | `GUIDELINES_MANIFEST.md` | Copy into the app's `docs/` folder **unchanged**. Never edit the copy. |
+| **References** | Everything else (`guideline.md`, the engineering standard, the flavors guide, the store gates, the other `*_GUIDELINE.md` files, language packs, profiles) | Never copy. Read them in place at `docs/guidelines/<file>`. |
 
 Paths inside the documents follow the same rule:
 
@@ -105,12 +106,16 @@ read across the row.
 
 | Profile | Applies to | Documents / sections in force |
 |---|---|---|
-| `Core Baseline` | Every app | Root `CLAUDE.md` (via [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md), **MUST**); Root `AGENTS.md` (via [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md), **MUST**); the 9 baseline `docs/` files, including `PROJECT_PROFILE.md`, `architecture.md`, `security.md` and `release_process.md` ([DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md) §6, **MUST**); [guideline.md](guideline.md); the Core Baseline rules of [flutter_project_engineering_standard.md](flutter_project_engineering_standard.md); language packs for declared languages |
-| `Production App Extension` | Apps shipped to real users / QA / stores | The above **plus** [platform_store_readiness.md](platform_store_readiness.md) (sections for declared channels), the full [release_process.md](release_process.md), [flutter_build_flavors_guide.md](flutter_build_flavors_guide.md) (if using flavors), and the `Production App Extension` sections of the engineering standard |
+| `Core Baseline` | Every app | The Security Baseline ([flutter_project_engineering_standard.md](flutter_project_engineering_standard.md) §15.1, `security.md` §1.1, **MUST**); Root `CLAUDE.md` (via [CLAUDE_MD_GUIDELINE.md](CLAUDE_MD_GUIDELINE.md), **MUST**); Root `AGENTS.md` (via [AGENTS_MD_GUIDELINE.md](AGENTS_MD_GUIDELINE.md), **MUST**); the 9 baseline `docs/` files, including `PROJECT_PROFILE.md`, `architecture.md`, `security.md` and `release_process.md` ([DOCS_FOLDER_GUIDELINE.md](DOCS_FOLDER_GUIDELINE.md) §6, **MUST**); [guideline.md](guideline.md); the Core Baseline rules of [flutter_project_engineering_standard.md](flutter_project_engineering_standard.md); language packs for declared languages |
+| `Production App Extension` | Apps shipped to real users / QA / stores | The above **plus** [platform_store_readiness.md](platform_store_readiness.md) (sections for declared channels), the full [release_process.md](release_process.md), the OWASP sign-off in `security.md` §12, [flutter_build_flavors_guide.md](flutter_build_flavors_guide.md) (if using flavors), and the `Production App Extension` sections of the engineering standard |
 | `Sensitive Data Extension` | Apps handling secrets, PII, health, finance, or local encrypted stores | The above **plus** the full [security.md](security.md) and the `Sensitive Data Extension` sections of the engineering standard |
 
 `security.md` and `release_process.md` exist in every app. An app outside the matching profile
 keeps them short and says so at the top.
+
+**Every app is secure by default.** The Security Baseline applies to every app, whatever its
+profile; the profiles only add controls on top. The rules are also written to keep the app easy
+to use and fast (engineering standard §15.6), so security never becomes a burden.
 
 Profiles stack: a shipped password manager is in all three; a small internal tool is in
 `Core Baseline` only.

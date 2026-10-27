@@ -3,11 +3,14 @@
 It is a **living security blueprint template** for your Flutter app. It has 18 sections that force every security decision to be written down explicitly rather than left as assumptions:
 
 - What data the app handles and how sensitive it is (Sections 1–2)
+- The **Security Baseline checklist** that every app must pass — secrets, HTTPS, tokens, sign-in, outside input, deep links, WebView, platform hardening, release build, third-party SDKs (Section 1.1)
 - What threats are in scope versus intentionally out of scope (Section 3)
-- A complete inventory of every piece of sensitive data and where it lives (Section 4)
-- How data is stored at rest, in memory, and in transit (Section 5)
+- Every **entry point** where data reaches the app from outside, and how each is checked (Section 3.1)
+- A complete inventory of every piece of sensitive data and where it lives, plus every third-party SDK and what it collects (Section 4)
+- How data is stored at rest, in memory, and in transit — including the HTTPS rules and the certificate-pinning decision (Section 5)
 - Your cryptography design — algorithm, key derivation, nonce strategy, format versioning (Section 6)
 - App-lock, session-expiry, background-lock, and protected-route enforcement (Section 7)
+- **Usability balance** — lock grace period, biometric fallback, response to rooted devices, and every control that adds a step for the user, with its reason (Section 7.1)
 - Binary protections — obfuscation, R8/ProGuard, debuggable flag (Section 8)
 - What is allowed and prohibited in logs (Section 9)
 - Platform-specific controls — Android FLAG_SECURE, iOS app-switcher overlay, Windows Credential Manager and MSIX capabilities, macOS App Sandbox and Hardened Runtime, Linux Secret Service and Snap/Flatpak confinement (Section 10)
@@ -21,6 +24,16 @@ It is a **living security blueprint template** for your Flutter app. It has 18 s
 - Pre-release security review checklist (Section 18)
 
 Right now it is a **blank template** — every field says `<placeholder>`. You fill it with your project's actual security decisions.
+
+**Security is never optional.** Every app — even a small one with no personal data — must pass
+the Security Baseline (engineering standard §15.1) and record it in Section 1.1. The
+`Sensitive Data Extension` only adds more controls on top.
+
+**Security must also be easy to live with.** The engineering standard §15.6 asks you to match
+controls to the real risk, use platform features (biometrics with a PIN fallback, passkeys,
+system pickers), ask for permissions only when needed, keep heavy crypto off the main thread so
+the app stays fast, and never block or slow the user without a written reason. Section 7.1 is
+where you record those choices.
 
 ---
 
@@ -41,23 +54,27 @@ Every time a decision is made — "we allow plaintext export with confirmation",
 
 ## What should you fill out BEFORE starting the project?
 
-These sections must be decided and written **before writing any code**, because they directly shape your database schema, your `AppException` hierarchy, your state model, and your `main()` sequence.
+Under the `Sensitive Data Extension`, these sections must be decided and written **before writing any code**, because they directly shape your database schema, your `AppException` hierarchy, your state model, and your `main()` sequence. Apps without sensitive data keep `security.md` short and fill at least §1.1, §3.1, §10, §11 and §13, plus §12 (OWASP sign-off) when the app ships to users
+under the Production App Extension (see the top of `security.md`).
 
 | Priority | Section | Why Before Coding |
 |----------|---------|-------------------|
 | 🔴 Must | **§1 Security Scope** | Locks sensitivity level and which profiles apply |
+| 🔴 Must | **§1.1 Security Baseline** | Every app. Decides HTTPS, token storage, sign-in method and secret handling before the first network or storage code |
+| 🔴 Must | **§3.1 Entry Points** | Every app. Lists deep links, imports, intents and payloads so each one is validated from the start |
 | 🔴 Must | **§2 Security Objectives** | Your north star — shapes every security trade-off |
 | 🔴 Must | **§3 Threat Model** | Defines what you are and are not protecting against — prevents over-engineering and under-engineering simultaneously |
 | 🔴 Must | **§4 Sensitive Data Inventory** | Tells you what needs encrypting, what must never be logged, and what must never go into `SharedPreferences` |
 | 🔴 Must | **§5 Storage Model** | Decides: sqflite vs secure storage vs plain files — shapes your entire persistence layer |
 | 🔴 Must | **§7 Authentication & Access Control** | App-lock strategy and background-lock rule — shapes your `AppLifecycleService` and your go_router redirect guard |
-| 🔴 Must | **§11 Permissions** | For your app: verify `INTERNET` is absent — this is your offline hard constraint |
+| 🔴 Must | **§11 Permissions** | List every permission and why it is needed. If the app is offline, verify `INTERNET` is absent |
 | 🟡 Soon | **§6 Cryptography Design** | Fill before writing any encryption utility or secure storage wrapper |
 | 🟡 Soon | **§8 Binary Protections** | Confirm `--obfuscate` is in all your release build commands before the first prod build |
 | 🟡 Soon | **§9 Logging Policy** | Before writing `AppLogger` — the policy shapes what the logger is allowed to emit |
 | 🟡 Soon | **§10 Platform Controls** | Android FLAG_SECURE, iOS app-switcher overlay — decide before building the first sensitive screen |
 | 🟡 Soon | **§13 Data Retention & Purge** | Before writing your Settings screen — the "Delete all data" action must be implemented, not bolted on later |
-| 🟢 Later | **§12 OWASP Top 10** | Fill in and verify before every production release (MUST for sensitive-data apps, SHOULD otherwise) |
+| 🟡 Soon | **§7.1 Usability Balance** | Before building the lock screen or any security prompt — keeps security from annoying users |
+| 🟢 Later | **§12 OWASP Top 10** | Fill in and verify before every production release (MUST for sensitive-data and production apps; items that do not apply are `n/a`) |
 | 🟢 Later | **§14 Backup / Import / Export** | Fill when those flows are designed |
 | 🟢 Later | **§15 Security Testing** | Fill as the test suite grows |
 | 🟢 Later | **§16 Incident Response** | Fill before first public release |
@@ -76,10 +93,12 @@ When `security.md` is populated and placed in your project, an AI assistant read
 - Know the logging policy and refuse to emit PII or sensitive field values in any log call it writes
 - Know the cryptography design and use the correct algorithm, nonce strategy, and format version in any encryption utility it writes
 - Know the app-lock rules and correctly implement the `AppLifecycleState.paused` → lock trigger in `AppLifecycleService`
-- Know the offline constraint is in force and confirm `INTERNET` permission is absent before suggesting any package
+- Know whether the app is offline and, if it is, confirm `INTERNET` permission is absent before suggesting any package
 - Know the threat model scope and not over-engineer controls for out-of-scope threats (e.g. rooted device protection when that is explicitly out of scope)
 - Know the OWASP compliance status and flag any code it writes that would flip a verified item back to unverified
 - Know the purge requirements and include the "Delete all data" path in any Settings screen it generates
+- Follow the Security Baseline (§1.1) in every change, and refuse to weaken a control (cleartext HTTP, trusting all certificates, exported components) without asking you first
+- Know the usability choices (§7.1) and avoid adding extra prompts or locks you did not ask for
 
 Without this document, the AI has to guess your security posture — and a wrong guess in security is significantly more costly than a wrong guess in architecture.
 
@@ -99,7 +118,7 @@ Open your existing `CLAUDE.md` and add this rule alongside Rule 1:
 Rule 3: Read docs/security.md before writing any repository method, any logger call,
         any encryption utility, any Settings screen, or any lifecycle handler.
         Never log values from the sensitive data inventory (Section 4).
-        Never write INTERNET permission into any manifest.
+        If the app is offline: never write the INTERNET permission into any manifest.
         Never store sensitive values in SharedPreferences.
 ```
 

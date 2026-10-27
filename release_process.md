@@ -18,6 +18,7 @@ not apply yet, fill in §1 only and write "not yet shipping" as the release prof
   - `Windows` — channels: `<Microsoft Store / signed direct download>`
   - `macOS` — channels: `<Mac App Store / Developer ID notarized download>`
   - `Linux` — channels: `<Snap Store / Flathub / AppImage / .deb / .rpm>`
+  - `Web` — hosting: `<host or service>`
 - Store gates in force: the sections of `docs/guidelines/platform_store_readiness.md` for each channel above.
 - Engineering standard profiles in force:
   - `Core Baseline`
@@ -62,7 +63,7 @@ not apply yet, fill in §1 only and write "not yet shipping" as the release prof
 |--------|------|---------|-----------------|
 | `dev` | `debug` | Local development | `flutter run --flavor dev` |
 | `dev` | `release` | Release-like QA | `flutter build apk --flavor dev --release` |
-| `prod` | `release` | Final release artifact | See sections 9–11B for full commands with all required flags |
+| `prod` | `release` | Final release artifact | See sections 9–11C for full commands with all required flags |
 
 Adjust the matrix if the project uses `staging`, `qa`, or no flavors.
 
@@ -79,8 +80,9 @@ Adjust the matrix if the project uses `staging`, `qa`, or no flavors.
 
 ## 6. Release Build Hardening
 
-All production release builds MUST include the following flags. Omitting any of them is a
-release-blocking issue.
+All production release builds for a native platform (Android, iOS, Windows, macOS, Linux) MUST
+include the following flags. Omitting any of them is a release-blocking issue. Web builds are
+covered in §11C.
 
 ### 6.1 Obfuscation And Debug Symbols
 
@@ -198,11 +200,13 @@ production release.
    for the declared minimum SDK). Other apps choose deliberately and record the choice in
    `docs/security.md` §10.
 
-Check via `aapt2`:
+Check via `aapt2`. Flutter copies the finished APKs to `build/app/outputs/flutter-apk/` (the
+paths below); the build log prints the exact file names. Without flavors the name has no
+`-prod` part (`app-arm64-v8a-release.apk`).
 
 ```bash
 # bash / zsh
-APK="build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk"
+APK="build/app/outputs/flutter-apk/app-arm64-v8a-prod-release.apk"
 # Check debuggable (must be absent or false)
 aapt2 dump badging "$APK" | grep -i debuggable
 # Check allowBackup (search manifest)
@@ -211,7 +215,7 @@ aapt2 dump xmltree "$APK" --file AndroidManifest.xml | grep -i allowBackup
 
 ```powershell
 # PowerShell (Windows)
-$APK = "build\app\outputs\apk\prod\release\app-arm64-v8a-prod-release.apk"
+$APK = "build\app\outputs\flutter-apk\app-arm64-v8a-prod-release.apk"
 # Check debuggable (must be absent or false)
 aapt2 dump badging $APK | Select-String -Pattern "debuggable"
 # Check allowBackup
@@ -230,7 +234,7 @@ Build → Analyze APK → Select APK → AndroidManifest.xml → confirm `debugg
 ### 6.5 Network Security Configuration And Cleartext Traffic
 
 Verify that cleartext HTTP traffic is disabled for production builds:
-- Ensure `android:usesCleartextTraffic="false"` in the merged manifest (enforced by default on Android 9+ / API 28+).
+- Ensure `android:usesCleartextTraffic="false"` in the merged manifest. Cleartext is off by default for apps that target API 28 (Android 9) or higher; set it explicitly anyway.
 - If `android:networkSecurityConfig` is defined in `res/xml/network_security_config.xml`, verify:
   - `<base-config cleartextTrafficPermitted="false">` is in place.
   - In production builds, no `<trust-anchors>` allow user-installed certificates (which would enable easy MITM proxy inspection via tools like Charles, Proxyman, or Burp Suite).
@@ -243,12 +247,12 @@ Before releasing, audit the bundled assets in the APK:
 
 ```bash
 # bash / zsh
-unzip -l build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk "assets/*"
+unzip -l build/app/outputs/flutter-apk/app-arm64-v8a-prod-release.apk "assets/*"
 ```
 
 ```powershell
 # PowerShell (Windows)
-tar -tf build\app\outputs\apk\prod\release\app-arm64-v8a-prod-release.apk | Select-String "assets/"
+tar -tf build\app\outputs\flutter-apk\app-arm64-v8a-prod-release.apk | Select-String "assets/"
 ```
 
 **Audit checklist:**
@@ -271,7 +275,7 @@ Inspect all declared activities, services, and broadcast receivers in the merged
 > Keystore location, `key.properties` naming, and the `.gitignore` rules: see
 > `guideline.md §2` (the source of truth).
 
-- Signing config location: `<local environment variables / secrets manager>` (never CI)
+- Signing config location: `<android/key.properties on the release machine (git-ignored, guideline.md §2) / local secrets manager>` (never CI)
 - Keystore or certificate ownership: `<owner>`
 - Secret rotation process: `<brief process>`
 - Rules:
@@ -279,8 +283,9 @@ Inspect all declared activities, services, and broadcast receivers in the merged
   - Local signing helpers must not expose secrets in committed files.
   - GitHub CI never holds signing secrets; it runs only checks (engineering
     standard §19).
-  - Keystore files MUST be backed up in at least two separate secure locations.
-    Losing the keystore means being unable to publish updates to the Play Store for that app.
+  - Keystore files and their passwords MUST be backed up as `guideline.md §2.3` says: at least
+    two separate secure backups, at least one of them offline (not cloud storage). Losing the
+    keystore means being unable to publish updates to the Play Store for that app.
   - The same rules apply to Apple certificates and provisioning profiles, App Store Connect API
     keys, notarization credentials, Windows code-signing certificates, and store upload tokens
     (Snapcraft, Partner Center). See `guideline.md §2.5`.
@@ -295,12 +300,12 @@ Complete these items before every release.
 
 - [ ] Required CI checks passed.
 - [ ] `dart format --output=none --set-exit-if-changed .` passed.
-- [ ] `flutter analyze` passed with zero warnings.
+- [ ] `flutter analyze` passed with no new warnings (zero is the goal, engineering standard §16.1).
 - [ ] `flutter test` passed.
 - [ ] Integration tests passed if applicable.
 - [ ] No critical or release-blocking bugs remain open.
-- [ ] Code generation is current: `dart run build_runner build --delete-conflicting-outputs` run
-      and all generated files up to date.
+- [ ] If the project uses code generation: `dart run build_runner build --delete-conflicting-outputs`
+      run and all generated files up to date.
 - [ ] Release artifacts built locally, not in CI (engineering standard §19.3).
 - [ ] Dependency licenses checked when the release adds dependencies (method: engineering
       standard §16.6 — there is no `flutter pub licenses` command).
@@ -313,7 +318,15 @@ Complete these items before every release.
 
 ### Security
 
-- [ ] `--obfuscate` and `--split-debug-info` applied to all release builds — including the
+- [ ] Security Baseline re-verified — every line of `docs/security.md` §1.1 is `verified` or
+      `n/a` with a reason (engineering standard §15.1).
+- [ ] No secrets in the shipped app — code, assets, `--dart-define` values, or native config
+      files. Keys that must ship are restricted on the provider's side.
+- [ ] No code path disables certificate checks (no trust-all `badCertificateCallback` or
+      `HttpOverrides`); iOS/macOS ATS has no `NSAllowsArbitraryLoads`, and any narrower exception
+      is documented in `docs/security.md` §10.
+- [ ] No debug menus, test accounts, or backdoors in the production build.
+- [ ] `--obfuscate` and `--split-debug-info` applied to all native release builds — including the
       build that a packaging tool (for example `msix:create`) packages (§11).
 - [ ] No `--analyze-size` build was shipped or archived as the release artifact (§6.3).
 - [ ] Debug symbols archived securely for this version.
@@ -330,7 +343,7 @@ Complete these items before every release.
 - [ ] Other declared platforms: iOS/macOS usage strings and entitlements, MSIX capabilities, Snap
       plugs and Flatpak `finish-args` are least-privilege (`docs/security.md` §10).
 - [ ] OWASP Mobile Top 10 checklist signed off in `docs/security.md` §12 (MUST under the Sensitive
-      Data Extension; SHOULD otherwise).
+      Data and Production App Extensions; items that do not apply are marked `n/a`).
 - [ ] Secrets, keys, and backup settings reviewed if applicable.
 - [ ] Sensitive-data flows revalidated if applicable.
 - [ ] Data retention and purge behavior verified.
@@ -396,7 +409,7 @@ All references are to the engineering standard unless noted. "Declared" means li
 1. Pull the intended release commit and verify it is clean (`git status`).
 2. Verify the version in `pubspec.yaml`.
 3. Fetch dependencies: `flutter pub get`.
-4. Run code generation: `dart run build_runner build --delete-conflicting-outputs`.
+4. Run code generation, only if the project uses it: `dart run build_runner build --delete-conflicting-outputs`.
 5. Run format, analyze, and test checks.
 6. Optional: run the size-analysis build (§6.3) **now, before** the hardened build, because it
    writes into the same output folders.
@@ -407,7 +420,9 @@ All references are to the engineering standard unless noted. "Declared" means li
 11. Archive debug symbols from `build/symbols/` to the secure archive location.
 12. Complete the Google Play readiness gate (`docs/guidelines/platform_store_readiness.md` §2) before uploading to Play.
 13. Upload to the intended distribution channel (Play Store console or secure internal repository).
-14. Tag the release in git: `git tag v<version>` and push.
+14. Tag the release in git: `git tag v<X.Y.Z>` and push. `<X.Y.Z>` is the `pubspec.yaml`
+    version without the `+build` part (§3). Tag once per release, even when several platforms
+    ship.
 
 ### Android Build Commands & Examples
 
@@ -417,7 +432,7 @@ All references are to the engineering standard unless noted. "Declared" means li
 ```bash
 # 1. Pre-build checks
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build --delete-conflicting-outputs   # only if the project uses code generation
 dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test
@@ -447,7 +462,7 @@ flutter build appbundle \
 ```powershell
 # 1. Pre-build checks
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build --delete-conflicting-outputs   # only if the project uses code generation
 dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test
@@ -479,7 +494,7 @@ flutter build appbundle `
 
 **Bash / macOS / Linux:**
 ```bash
-VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2)
+VERSION=$(grep '^version:' pubspec.yaml | cut -d' ' -f2 | tr -d '\r')
 
 # Build Split APKs
 flutter build apk \
@@ -517,11 +532,11 @@ flutter build appbundle `
 
 ```bash
 # Verify no debuggable flag, and check allowBackup against docs/security.md §10
-aapt2 dump badging build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk | grep -i debuggable
-aapt2 dump xmltree build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk --file AndroidManifest.xml | grep -i allowBackup
+aapt2 dump badging build/app/outputs/flutter-apk/app-arm64-v8a-prod-release.apk | grep -i debuggable
+aapt2 dump xmltree build/app/outputs/flutter-apk/app-arm64-v8a-prod-release.apk --file AndroidManifest.xml | grep -i allowBackup
 
 # Audit asset bundle for unencrypted secrets
-unzip -l build/app/outputs/apk/prod/release/app-arm64-v8a-prod-release.apk "assets/*"
+unzip -l build/app/outputs/flutter-apk/app-arm64-v8a-prod-release.apk "assets/*"
 ```
 
 ---
@@ -533,16 +548,18 @@ Build machine: macOS with the Xcode version App Store Connect currently requires
 1. Pull the intended release commit and verify it is clean (`git status`).
 2. Confirm signing and provisioning are valid for the prod bundle id (Apple Distribution
    certificate, App Store profile).
-3. Run format, analyze, test, and code generation checks.
+3. Run format, analyze and test checks, and code generation if the project uses it.
 4. Optional: run the size-analysis build (§6.3) first — it writes into the same output folders.
 5. Build the iOS release artifact with all hardening flags (commands below) and record its size.
 6. Validate `Info.plist` usage strings, privacy manifest, export compliance, and environment
    config (`docs/guidelines/platform_store_readiness.md` §3.3).
 7. Archive debug symbols from `build/symbols/`.
-8. Upload the `.ipa` with Xcode Organizer or Transporter.
+8. Upload the `.ipa` from `build/ios/ipa/` with Apple's Transporter app, or open
+   `build/ios/archive/Runner.xcarchive` in Xcode Organizer and use Distribute App.
 9. Test the build through TestFlight on a real device, in every declared language.
 10. Complete the App Store gate (`docs/guidelines/platform_store_readiness.md` §3) and submit for review.
-11. Tag the release in git: `git tag v<version>` and push.
+11. Tag the release in git: `git tag v<X.Y.Z>` and push (version without `+build`, §3), unless
+    another platform's steps already tagged this release.
 
 ### iOS Build Commands
 
@@ -565,7 +582,7 @@ Build machine: Windows x64. Flutter builds Windows arm64 only on an arm64 Window
 1. Pull the intended release commit.
 2. Verify the version in `pubspec.yaml` and the `msix_config` version in `pubspec.yaml`, and
    that `msix_config` has `build_windows: false` (see the warning below).
-3. Run format, analyze, test, and code generation checks.
+3. Run format, analyze and test checks, and code generation if the project uses it.
 4. Optional: run the size-analysis build (§6.3) first.
 5. Build the hardened Windows release (commands below) and record its size.
 6. Create the MSIX package from that build — `store: true` for the Microsoft Store, or signed
@@ -576,6 +593,8 @@ Build machine: Windows x64. Flutter builds Windows arm64 only on an arm64 Window
 9. Archive debug symbols.
 10. Complete the Windows gate (`docs/guidelines/platform_store_readiness.md` §4), then submit to Partner
     Center or publish the signed download with its checksum.
+11. Tag the release in git: `git tag v<X.Y.Z>` and push (version without `+build`, §3), unless
+    another platform's steps already tagged this release.
 
 ### Windows Build Commands
 
@@ -605,7 +624,7 @@ Build machine: macOS with a current Xcode.
 
 1. Pull the intended release commit.
 2. Verify the version in `pubspec.yaml`, and the bundle id and category in `macos/Runner/`.
-3. Run format, analyze, test, and code generation checks.
+3. Run format, analyze and test checks, and code generation if the project uses it.
 4. Optional: run the size-analysis build (§6.3) first.
 5. Build the macOS release with all hardening flags (commands below) and record its size.
    Confirm the architectures with `lipo -archs` match the documented choice (universal, or
@@ -620,6 +639,8 @@ Build machine: macOS with a current Xcode.
      `xcrun stapler`, package as a signed, notarized and stapled DMG, and verify with `spctl` on a
      clean Mac (`docs/guidelines/platform_store_readiness.md` §5.3).
 9. Complete the macOS gate (`docs/guidelines/platform_store_readiness.md` §5).
+10. Tag the release in git: `git tag v<X.Y.Z>` and push (version without `+build`, §3), unless
+    another platform's steps already tagged this release.
 
 ### macOS Build Commands
 
@@ -645,7 +666,7 @@ build packages from engineering standard §5.5.3.
 1. Pull the intended release commit.
 2. Verify the version in `pubspec.yaml`, `APPLICATION_ID` in `linux/CMakeLists.txt`, and the
    version in packaging files (`snap/snapcraft.yaml`, Flatpak manifest, AppStream `releases`).
-3. Run format, analyze, test, and code generation checks.
+3. Run format, analyze and test checks, and code generation if the project uses it.
 4. Optional: run the size-analysis build (§6.3) first.
 5. Build the Linux release with all hardening flags (commands below) and record its size.
 6. Archive debug symbols.
@@ -655,6 +676,8 @@ build packages from engineering standard §5.5.3.
 9. Install and run each package on clean VMs of the main target distros, under Wayland and X11.
 10. Complete the Linux gate (`docs/guidelines/platform_store_readiness.md` §6), then upload
     (`snapcraft upload`, Flathub pull request) or publish the files with checksums.
+11. Tag the release in git: `git tag v<X.Y.Z>` and push (version without `+build`, §3), unless
+    another platform's steps already tagged this release.
 
 ### Linux Build Commands
 
@@ -680,6 +703,29 @@ snapcraft
 
 ---
 
+## 11C. Web Release Steps
+
+Only when Web is a declared platform. Web has no store gate, but the rules in
+`docs/guidelines/platform_store_readiness.md` §1 (privacy policy, data disclosure, testing the
+real build) still apply to a public site.
+
+1. Pull the intended release commit.
+2. Verify the version in `pubspec.yaml`.
+3. Run format, analyze and test checks, and code generation if the project uses it.
+4. Check `flutter build web -h` for the release and hardening options your Flutter offers. Web
+   builds do not take `--split-debug-info` the way native builds do, so the §6.1 symbol rule
+   does not apply; record the options you use in `docs/architecture.md` §15.
+5. Build: `flutter build web --release` (plus the flavor flag from §5 and the options from
+   step 4). Output: `build/web/`.
+6. Check the bundle like §6.6: no secrets, keys or test data in `build/web/`.
+7. Deploy to the declared host over HTTPS only.
+8. Open the deployed site in every supported browser and complete the primary flow, in every
+   declared language.
+9. Tag the release in git: `git tag v<X.Y.Z>` and push (version without `+build`, §3), unless
+   another platform's steps already tagged this release.
+
+---
+
 ## 12. Distribution Channels
 
 Keep one row per declared channel; delete the rest.
@@ -687,7 +733,7 @@ Keep one row per declared channel; delete the rest.
 | Channel | Artifact | Audience | Notes |
 |---------|----------|----------|-------|
 | Google Play | `.aab` | Public | Staged rollout; gate §2 |
-| Direct APK | split `.apk` | `<audience>` | Signed with the release keystore |
+| Direct APK | split `.apk` | `<audience>` | Signed with the release keystore; Android developer verification checked (store gate §2.5A) |
 | Apple App Store | `.ipa` | Public | TestFlight first; gate §3 |
 | Microsoft Store | `.msix` per architecture (`store: true`) | Public | Gate §4.2 |
 | Windows direct download | signed `.msix` or installer `.exe` | `<audience>` | Code-signed + timestamped; gate §4.3 |
@@ -696,6 +742,7 @@ Keep one row per declared channel; delete the rest.
 | Snap Store | `.snap` | Public | edge → beta → stable; gate §6.2 |
 | Flathub | Flatpak (built by Flathub) | Public | Gate §6.3 |
 | Linux direct download | AppImage / `.deb` / `.rpm` | `<audience>` | Checksums over HTTPS; gate §6.4 |
+| Web | `build/web/` deployed to a host | `<audience>` | HTTPS only; §11C |
 
 ---
 
@@ -721,7 +768,8 @@ Store links or references to release evidence here after each release.
 - Built artifact: `<location>`
 - Release notes: `<location>`
 - Store submission or rollout record: `<location>`
-- OWASP checklist sign-off (required under the Sensitive Data Extension): `<signed by / date>`
+- OWASP checklist sign-off (required under the Production App Extension and the Sensitive Data
+  Extension): `<signed by / date>`
 
 ---
 
@@ -731,6 +779,7 @@ Store links or references to release evidence here after each release.
       clean device).
 - [ ] Analytics or telemetry sanity checked if applicable.
 - [ ] User-reported issues triaged.
-- [ ] Release tag created and pushed: `git tag v<version> && git push origin v<version>`.
+- [ ] Release tag created and pushed: `git tag v<X.Y.Z> && git push origin v<X.Y.Z>` (version
+      without `+build`, §3).
 - [ ] Debug symbols confirmed in secure archive.
 - [ ] Follow-up tasks recorded.

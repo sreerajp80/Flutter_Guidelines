@@ -48,7 +48,8 @@ rules below.
 
 ## 2. Local copy vs the submodule — where a doc belongs
 
-The guideline set has two kinds of files (see `README.md`, "Templates and references"):
+Apart from `GUIDELINES_MANIFEST.md` (the pointer file, copied unchanged — §1), the guideline set
+has two kinds of files (see `README.md`, "Templates and references"):
 
 - **Templates** — `PROJECT_PROFILE_TEMPLATE.md` (copied as `PROJECT_PROFILE.md`),
   `architecture.md`, `security.md`, `release_process.md`. Copy them into `docs/` and fill them
@@ -103,7 +104,7 @@ always the same.
 5. **Body**, using these shared conventions:
    - **Simple English.** Short sentences, common words. Explain any jargon.
    - **Callouts** for danger. Use a `>` blockquote for secrets/security warnings, e.g. the
-     keystore warning in `release_signing.md`.
+     keystore warning in `release_process.md`.
    - **Code fences with a language tag** (e.g. `powershell`, `bash`, `dart`). Give
      both PowerShell and bash when a command differs by OS.
    - **Tables** for structured lists (packages, colors, profiles, routes).
@@ -118,8 +119,10 @@ Two kinds of docs live in `docs/`:
 
 - **Living documents** describe how the app *is* and are kept current: `architecture.md`,
   `security.md`, `release_process.md`, `workflow_rules.md`, `dependencies.md`,
-  `project_structure.md`. No date line — they are always "now".
-- **Point-in-time documents** record a moment: `implementation_progress.md`,
+  `project_structure.md`. No date line — they are always "now". One exception:
+  `implementation_progress.md` is a living status checklist that is updated in place, so it
+  carries a `**Last updated:**` line with an absolute date.
+- **Point-in-time documents** record a moment: `implementation_plan.md`,
   `security_audit_phase*.md`, `known_gaps.md`. These **start with a `**Date:**` line** (and
   often a `**Scope:**` / `**Result:**` line) right under the purpose paragraph, and are not
   rewritten later — you add a new dated entry or a new file instead.
@@ -140,14 +143,17 @@ When generating or initializing the `docs/` folder for a new Flutter app, **alwa
 6. **`dependencies.md`** (Living) — Approved baseline packages and explicit prohibited dependencies list.
 7. **`project_structure.md`** (Living) — Project file tree and directory responsibility layout.
 8. **`implementation_plan.md`** (Point-in-time) — Phase-by-phase build roadmap with objectives and action steps (starts with `**Date:**`).
-9. **`implementation_progress.md`** (Point-in-time) — Live status checklist by phase (`- [x]` / `- [ ]`, starts with `**Date:**`).
+9. **`implementation_progress.md`** (Living) — Status checklist by phase (`- [x]` / `- [ ]`), updated in place, with a `**Last updated:**` line (§5).
 
 Together with `GUIDELINES_MANIFEST.md` and the `guidelines/` submodule, these 9 documents form the complete baseline documentation suite required for every new project.
 
-`security.md` and `release_process.md` are filled in **in full** when the Sensitive Data Extension
-or the Production App Extension applies. Otherwise keep them short: state at the top which
-profile is not in force, then fill in only what is true today (for `security.md` at least the data
-retention policy, §13; for `release_process.md` at least §1 Release Scope).
+`release_process.md` is filled in **in full** when the Production App Extension applies.
+`security.md` is filled in **in full** when the Sensitive Data Extension applies. Otherwise keep
+the file short: state at the top which profile is not in force, then fill in only what is true
+today (for `security.md` at least §1.1
+Security Baseline, §3.1 entry points, §10 platform controls, §11 permissions and §13 data
+retention — the Security Baseline applies to every app — plus §12 OWASP sign-off when the
+Production App Extension applies; for `release_process.md` at least §1 Release Scope).
 
 ---
 
@@ -160,12 +166,12 @@ skeleton. Prefer these names over inventing new ones.
 | --- | --- | --- | --- |
 | `PROJECT_PROFILE.md` | Living | The project's declared choices — product brief, identity, platforms, stores, languages, About options, tools. Copy from the submodule's `PROJECT_PROFILE_TEMPLATE.md`. | Product brief · Identity · Profiles · Platforms and distribution · Languages · About screen · Optional values · Tools and workflow |
 | `architecture.md` | Living | The app's technical design — layers, packages, folder tree, key flows. Fill in from the submodule blueprint. | Project config · Design goals · Layered architecture · Packages · Folder structure · Theme · Key interactions · Non-functional requirements |
-| `security.md` (or `security_rules.md`) | Living | Security rules and/or blueprint — threat model, permissions, crypto, data handling. Short "rules" file may link to a fuller blueprint. | Boundaries/offline rules · Minimal permissions · Input validation · Secrets handling · OWASP/threat checklist |
-| `release_process.md` / `release_signing.md` | Living | How to build, sign, and ship a release. | Secrets warning callout · What the build expects · Generate keystore · `key.properties` · Build commands · Verify signature · Backup checklist |
+| `security.md` | Living | Security rules and/or blueprint — threat model, permissions, crypto, data handling. Short "rules" file may link to a fuller blueprint. | Boundaries/offline rules · Minimal permissions · Input validation · Secrets handling · OWASP/threat checklist |
+| `release_process.md` | Living | How to build, sign, and ship a release. | Secrets warning callout · What the build expects · Generate keystore · `key.properties` · Build commands · Verify signature · Backup checklist |
 | `workflow_rules.md` | Living | Plan-before-changing and log-after-changing rules for this project (mirrors the workflow in `CLAUDE_MD_GUIDELINE.md`). | Plan before changing · Approval gate · Log after changing |
 | `<app>_idea.md` | Living | The product concept and requirements — the "why" and "what". | Core concept · Experience/UX · Design system · Navigation · Development phases |
 | `implementation_plan.md` | Point-in-time | Phase-by-phase build plan with objectives and action steps. | One `##` per phase (Objective + Action steps) · Verification / Definition of Done |
-| `implementation_progress.md` | Point-in-time | Live checklist of what is done. | Status overview · Detailed task checklist by phase (`- [x]`) |
+| `implementation_progress.md` | Living (with `**Last updated:**`) | Checklist of what is done, updated in place. | Status overview · Detailed task checklist by phase (`- [x]`) |
 | `known_gaps.md` | Point-in-time | What is declared but not integrated, and resolved items. | Resolved (dated) · Still open / not integrated · Out of scope |
 | `dependencies.md` | Living | Notable packages and their integration status. | Grouped bullet list by concern (declared vs integrated) |
 | `project_structure.md` | Living | The project file tree, for quick orientation. | A single fenced tree, or short notes + tree |
@@ -174,6 +180,9 @@ skeleton. Prefer these names over inventing new ones.
 
 If what you need is **not** in this table, it is probably a section inside an existing doc
 (see §8) rather than a new file.
+
+Older apps may have `security_rules.md` or `release_signing.md`. Keep them if they exist, but new
+apps use the baseline names from §6 (`security.md`, `release_process.md`).
 
 ---
 
@@ -198,9 +207,8 @@ Keep the `docs/` set small and predictable.
 - Link "sideways" to siblings: `[architecture.md](architecture.md)`.
 - Link "down" into the submodule for a shared reference:
   `[engineering standard](guidelines/flutter_project_engineering_standard.md)`.
-- When a short rules file exists alongside a fuller blueprint, the short file should say where
-  the full detail lives (e.g. `security_rules.md` → "Full detail is in the Security
-  Architecture section of `architecture.md`.").
+- When an older app has a short rules file alongside a fuller doc, the short file should say
+  where the full detail lives (e.g. `security_rules.md` → "Full detail is in `security.md`.").
 
 ---
 

@@ -104,6 +104,7 @@ Document what the app does in response to each lifecycle state change.
 |----------------|--------------|
 | `resumed` | `<e.g. resume timers, re-validate lock state>` |
 | `inactive` | `<e.g. obscure screen content for sensitive views>` |
+| `hidden` | `<e.g. desktop window minimised or hidden; on mobile, comes just before paused>` |
 | `paused` | `<e.g. flush pending DB writes, trigger app lock>` |
 | `detached` | `<e.g. finalize writes, close file handles>` |
 | Memory pressure | `<e.g. clear image cache>` |
@@ -122,9 +123,10 @@ If the app is **fully offline**:
 - The merged Android release manifest MUST NOT contain `<uses-permission android:name="android.permission.INTERNET" />`.
   Verify this by inspecting the actual permissions in the built artifact, not via
   `output-metadata.json` (which only enumerates the APK files produced):
-  - `aapt2 dump permissions build/app/outputs/apk/prod/release/<apk>` — lists every permission baked into the APK.
+  - `aapt2 dump permissions build/app/outputs/flutter-apk/<apk>` — lists every permission baked into the APK.
   - Or open the merged manifest XML at
-    `build/app/intermediates/merged_manifests/prodRelease/AndroidManifest.xml` and search for `INTERNET`.
+    `build/app/intermediates/` (a `merged_manifest*` folder for the release variant, e.g.
+    `prodRelease`; the exact folder name differs between AGP versions) and search for `INTERNET`.
   - Or in Android Studio: Build → Analyze APK → select the APK → open `AndroidManifest.xml`.
 - All dependencies have been audited for transitive network activity (record the result in
   `docs/dependencies.md` and in the release evidence, `docs/release_process.md` §14).
@@ -266,24 +268,26 @@ Migration history:
 
 ### Target Platforms And Distribution
 
-One row per declared platform (from `docs/PROJECT_PROFILE.md`). Delete the rest.
+One row per declared platform (from `docs/PROJECT_PROFILE.md`). Delete the rest. The minimum OS
+for each platform, and its reason, is recorded only in `docs/PROJECT_PROFILE.md` §3.
 
-| Platform | Minimum OS | Release artifact | Channel(s) | Signing | Platform-specific notes |
-|---|---|---|---|---|---|
-| Android | `minSdk <NN>` (reason) | `.aab` / split `.apk` | `<Google Play / direct>` | release keystore + Play App Signing | `<16 KB pages, permissions>` |
-| iOS | `iOS <NN>` | `.ipa` | App Store | Apple Distribution | `<capabilities, usage strings>` |
-| Windows | `Windows 10 <build>` | `.msix` / installer | `<Microsoft Store / direct>` | Store-signed / code-signing cert | `<MSIX capabilities>` |
-| macOS | `macOS <NN>` | `.app` → `.pkg` / `.dmg` | `<Mac App Store / Developer ID>` | Apple Distribution / Developer ID + notarization | `<entitlements>` |
-| Linux | `<oldest distro>` | `.snap` / Flatpak / AppImage / `.deb` | `<Snap Store / Flathub / direct>` | store-side / GPG checksums | `<plugs, finish-args>` |
+| Platform | Release artifact | Channel(s) | Signing | Platform-specific notes |
+|---|---|---|---|---|
+| Android | `.aab` / split `.apk` | `<Google Play / direct>` | release keystore + Play App Signing | `<16 KB pages, permissions>` |
+| iOS | `.ipa` | App Store | Apple Distribution | `<capabilities, usage strings>` |
+| Windows | `.msix` / installer | `<Microsoft Store / direct>` | Store-signed / code-signing cert | `<MSIX capabilities>` |
+| macOS | `.app` → `.pkg` / `.dmg` | `<Mac App Store / Developer ID>` | Apple Distribution / Developer ID + notarization | `<entitlements>` |
+| Linux | `.snap` / Flatpak / AppImage / `.deb` | `<Snap Store / Flathub / direct>` | store-side / GPG checksums | `<plugs, finish-args>` |
+| Web | `build/web/` | `<host>` | — | `<hardening options from flutter build web -h>` |
 
 ### Platform Differences
 
 List any feature that behaves differently, or is missing, on a declared platform, and how the
 code handles it (e.g. "no background sync on desktop — sync runs on app start").
 
-| Feature | Android | iOS | Windows | macOS | Linux |
-|---|---|---|---|---|---|
-| `<feature>` | `<behavior>` | `<behavior>` | `<behavior>` | `<behavior>` | `<behavior>` |
+| Feature | Android | iOS | Windows | macOS | Linux | Web |
+|---|---|---|---|---|---|---|
+| `<feature>` | `<behavior>` | `<behavior>` | `<behavior>` | `<behavior>` | `<behavior>` | `<behavior>` |
 
 ---
 
@@ -344,7 +348,7 @@ test/
 
 Document constraints that shape implementation choices.
 
-- Minimum supported OS versions: `<versions>`
+- Minimum supported OS versions: see `docs/PROJECT_PROFILE.md` §3
 - Performance constraints:
   - Cold startup target: under 2 seconds to first meaningful frame (release build)
   - Frame budget: 16 ms at 60 Hz; sustained jank above 5% is release-blocking

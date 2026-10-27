@@ -48,7 +48,10 @@ Run only read-only checks here. Change nothing yet.
 4. **Only touch declared platforms.** Do not create or edit `ios/`, `macos/`, `linux/`, … unless
    the profile declares that platform.
 5. **Use simple English** in plans, change logs, questions and replies.
-6. **Never change the guidelines submodule.** In an app, `docs/guidelines/` is read-only: never
+6. **Security is never optional.** Every app follows the Security Baseline (engineering
+   standard §15.1). Never weaken a security control to make something work; if a task seems to
+   need it, ask the user in the plan. Keep security easy to use and fast (§15.6).
+7. **Never change the guidelines submodule.** In an app, `docs/guidelines/` is read-only: never
    edit, pull, check out or commit it or its version. If a guideline needs a change, write a
    note for the user instead (`DOCS_FOLDER_GUIDELINE.md` §1.1). If the folder is empty or
    missing, stop and ask the user.
@@ -116,7 +119,7 @@ Ask only the items the brief did not answer.
 | **Languages** | The template language; every other UI language; store-listing languages; who checks each translation (a role, not a personal email) |
 | **Data and privacy** | Offline only, or online; backend or third-party API; user accounts / sign-in; what data is stored and where (device only, cloud); any personal, health, finance or secret data; analytics; crash reporting; ads; in-app purchases or subscriptions; device permissions (camera, location, files, notifications, …) and why each is needed; privacy policy URL |
 | **Look and feel** | Brand colours, or the default theme; app icon (user supplies it, or a placeholder for now); light / dark mode; About screen rows and the optional signature badge (`guideline.md` §1.7) |
-| **Tools and workflow** | Which AI agents will work on the project (Claude Code, Gemini, Codex, other); IDE; git hosting (GitHub or other); whether CI checks are wanted; who owns releases (a role) |
+| **Tools and workflow** | Which AI agents will work on the project (Claude Code, Gemini, Codex, other); IDE; git hosting (GitHub or other); where the CI checks run (required on GitHub; on another host, that host's CI or local checks before each merge); who owns releases (a role) |
 | **Technical defaults** | State management, structure tier, build flavors — offer the documented default and ask for a yes |
 
 ### 3.3 What the answers decide
@@ -125,7 +128,9 @@ After the intake, tell the user in a short summary what follows from their answe
 
 - the applicability profiles (engineering standard §1.2) — Production App Extension if the app
   ships to real users or stores; Sensitive Data Extension if it handles secrets, PII, health or
-  finance data or local encrypted data;
+  finance data or local encrypted data (if unsure, choose it);
+- that the Security Baseline (engineering standard §15.1) applies to the app whatever the
+  profiles are;
 - which store gates in `platform_store_readiness.md` apply (one per declared channel);
 - which language packs apply;
 - which agent instruction files to write (§4 step 3).
@@ -169,9 +174,10 @@ approved plans; do not jump ahead.
    declared language, tooltips, accessibility. If a feature needs a fact the profile does not
    have (a new permission, a backend, a new language), ask the user and update the profile first.
 8. **Release.** Complete `docs/release_process.md` in full, and `docs/security.md` in full if the
-   Sensitive Data Extension applies (both files exist from step 3). Pass the gate for **each declared channel** in
+   Sensitive Data Extension applies (both files exist from step 3); every app fills in
+   `docs/security.md` §1.1 (Security Baseline). Pass the gate for **each declared channel** in
    `platform_store_readiness.md`, then follow the platform's release steps in
-   `release_process.md` (§9 Android, §10 iOS, §11 Windows, §11A macOS, §11B Linux).
+   `release_process.md` (§9 Android, §10 iOS, §11 Windows, §11A macOS, §11B Linux, §11C Web).
 
 ## 5. Existing app — adoption sequence
 
@@ -196,7 +202,10 @@ these are true:
 - [ ] `guideline.md` §4 checklist passes.
 - [ ] Engineering standard §23 Definition of Done holds for every merged change.
 - [ ] A hardened release (`--obfuscate --split-debug-info`) is built locally for every declared
-      platform; GitHub CI runs only the checks (engineering standard §19).
+      native platform (Web: `release_process.md` §11C); GitHub CI runs only the checks
+      (engineering standard §19).
+- [ ] The Security Baseline in `docs/security.md` §1.1 is fully `verified` or `n/a`, and the
+      OWASP checklist (§12) is signed off (engineering standard §15.1, §15.3).
 - [ ] Signing is set up for every declared platform, with no signing material in git
       (`guideline.md` §2, §2.5).
 - [ ] `platform_store_readiness.md` §1 passes, plus the section for each declared channel:
@@ -206,4 +215,4 @@ these are true:
 
 Store rules change every year. Before each release, check the store's current requirements. If
 something changed, tell the user so they can update `platform_store_readiness.md` in the
-guidelines repository (§1 rule 6).
+guidelines repository (§1 rule 7).

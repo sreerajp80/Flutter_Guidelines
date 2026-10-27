@@ -29,6 +29,7 @@ everything itself.
 ### How to choose
 - **New apps use Thin.** Every new app has the baseline `docs/` set (`DOCS_FOLDER_GUIDELINE.md` §6), so the detail already has a home.
 - **Thick** is only for an existing app that has no `docs/` folder yet. Move it to Thin when the `docs/` set is created.
+- Thick is a **temporary** state while an existing app is migrated (`guideline.md`: existing apps SHOULD migrate). The baseline `docs/` set (`DOCS_FOLDER_GUIDELINE.md` §6) is still the goal; create it as part of the migration.
 
 ---
 
@@ -151,8 +152,8 @@ Read it before making any change. <If Thin: See the docs table below for full de
 
 ## Architecture rules
 
-- Layout: <Tier 1 layer-first under `lib/` — config/ models/ providers/ repositories/
-  screens/ services/ widgets/ main.dart>. Do not restructure without instruction.
+- Layout: <Tier 1 layer-first under `lib/` — core/config/ core/logging/ models/ providers/
+  repositories/ screens/ services/ widgets/ l10n/ main.dart>. Do not restructure without instruction.
 - Layer boundaries: widgets must not know <SQL / SharedPreferences keys / file paths / intents>.
   Services must not know <BuildContext / navigation routes / UI strings>.
 - Dependency direction: <screens → providers → repositories/services → database → models>.
@@ -217,7 +218,8 @@ flutter build linux --release --flavor prod \
 
 ## Signing / keystore   <!-- if the app ships releases -->
 
-- Keystore file: <path>. Alias: <alias>. Keep at least one offline backup.
+- Keystore file: <path>. Alias: <alias>. Back it up as `docs/guidelines/guideline.md` §2.3
+  says: at least two separate secure backups, at least one of them offline.
 - Create `android/key.properties` (gitignored — never commit).
 - `.gitignore` must include: `android/key.properties`, `android/*.jks`, `android/*.keystore`, and `build/` (which also holds the debug symbols).
 - Other platforms: <Apple certificates/profiles, Windows code-signing certificate, notarization
@@ -228,9 +230,13 @@ flutter build linux --release --flavor prod \
 ## Security rules
 
 - Never log secrets, keys, tokens, or decrypted data — even in debug builds.
+- Follow the Security Baseline (`docs/guidelines/flutter_project_engineering_standard.md` §15.1).
+  Never weaken a security control to make something work; ask first.
+- HTTPS only; never disable certificate checks.
+- No secrets in code, assets, or `--dart-define` — anything shipped in the app is public.
 - <Store sensitive data in flutter_secure_storage; never in SharedPreferences.>
 - Request only the permissions the app needs; <never add INTERNET if the app is offline>.
-- <android:allowBackup="false" must remain in the manifest.> (if applicable)
+- <Backup and device-transfer rules stay as recorded in `docs/security.md` §10.> (Android)
 
 ---
 
@@ -258,8 +264,11 @@ flutter build linux --release --flavor prod \
   Import `package:material_ui/material_ui.dart`, never `package:flutter/material.dart` (engineering standard §6.1).
 - The About screen is data-driven and localized<; it ends with the signature badge "<badge text>"
   — only if the project profile enables it>.
-- Literals are allowed only for logs, non-UI exception messages, asset paths, route names, and
-  map/JSON keys.
+- Literals are allowed only for logs, non-UI exception messages, asset paths, route names,
+  map/JSON keys, `Semantics` test tags and developer-only screens.
+- The one other source of user-visible text is the About-screen values in
+  `assets/config/app_config.json` (locale maps, `docs/guidelines/guideline.md` §1). The app name
+  comes from `appName` there and matches every platform's own files (§1.8).
 
 ---
 
@@ -268,14 +277,14 @@ flutter build linux --release --flavor prod \
 - Files `snake_case.dart`; classes `PascalCase`; variables/methods `camelCase`;
   providers `camelCase` + `Provider` suffix.
 - Use `package:` imports, not relative. Prefer `const` constructors, `final` locals, single quotes.
-- Run `dart format .` and keep `flutter analyze` at zero warnings before every commit.
+- Run `dart format .` before every commit; `flutter analyze` adds no new warnings (zero is the goal).
 
 ---
 
 ## Testing rules
 
 - Mirror `lib/` structure in `test/` (e.g. `test/services/`, `test/data/`).
-- <Coverage target: e.g. 80% on lib/data and lib/domain.>
+- No fixed coverage percentage (engineering standard §18.3); name the critical areas below.
 - Critical areas that must be covered before release: <list them>.
 - Add or update a test whenever you add or change a service/DAO/use-case.
 
@@ -311,6 +320,8 @@ Every change follows plan-before-changing and log-after-changing:
    `yyyymmdd_hhMMss_<short-slug>.md` with a `**Status:**` line, the files to change, the issue,
    and the fix. Then **STOP and get explicit approval** before editing/creating/deleting any
    project file (other than the plan). A question or ambiguous reply is not approval.
+   A plan that touches network, storage, sign-in, permissions, deep links, WebViews, platform
+   folders or dependencies has a short **"Security impact"** line (engineering standard §22.2).
 2. **Log after changing.** After implementing, write a change log to `change_log/` named
    `yyyymmdd_hhMMss_<short-slug>.md` describing what changed and referencing its plan.
 3. **Relative paths & privacy only.** `plans/` and `change_log/` files are committed and may become
